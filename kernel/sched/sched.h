@@ -492,6 +492,9 @@ struct task_group {
 	struct uclamp_se	uclamp[UCLAMP_CNT];
 #endif
 
+#ifdef CONFIG_NUMA_BALANCING
+	u64			nlb_enabled;
+#endif
 };
 
 #ifdef CONFIG_GROUP_SCHED_WEIGHT

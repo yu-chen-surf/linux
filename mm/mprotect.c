@@ -155,10 +155,11 @@ static long change_pte_range(struct mmu_gather *tlb,
 				toptier = node_is_toptier(nid);
 
 				/*
-				 * Skip scanning top tier node if normal numa
-				 * balancing is disabled
+				 * Skip scanning top tier node if neither
+				 * normal nor cgroup numa balancing is disable
 				 */
-				if (!(sysctl_numa_balancing_mode & NUMA_BALANCING_NORMAL) &&
+				if (!(sysctl_numa_balancing_mode &
+				    (NUMA_BALANCING_NORMAL | NUMA_BALANCING_CGROUP)) &&
 				    toptier)
 					continue;
 				if (folio_use_access_time(folio))
