@@ -76,15 +76,25 @@ static bool show_mba_info(unsigned long *bw_imc, unsigned long *bw_resc)
 	unsigned int allocation;
 	bool ret = false;
 	int runs;
+	long max_avg_bw_imc = 0;
 
 	ksft_print_msg("Results are displayed in (MB)\n");
+
+	allocation = ALLOCATION_MAX / ALLOCATION_STEP - 1;
+	/* record the max bandwidth */
+	for (runs = NUM_OF_RUNS * allocation;
+	     runs < NUM_OF_RUNS * allocation + NUM_OF_RUNS ; runs++) {
+		max_avg_bw_imc += bw_imc[runs];
+	}
+	max_avg_bw_imc /= NUM_OF_RUNS;
+
 	/* Memory bandwidth from 100% down to 10% */
 	for (allocation = 0; allocation < ALLOCATION_MAX / ALLOCATION_STEP;
 	     allocation++) {
 		unsigned long sum_bw_imc = 0, sum_bw_resc = 0;
-		long avg_bw_imc, avg_bw_resc;
-		int avg_diff_per;
-		float avg_diff;
+		long avg_bw_imc, avg_bw_resc, avg_expect_imc;
+		int avg_diff_per, avg_expect_diff_per;
+		float avg_diff, avg_expect_diff;
 
 		for (runs = NUM_OF_RUNS * allocation;
 		     runs < NUM_OF_RUNS * allocation + NUM_OF_RUNS ; runs++) {
@@ -94,6 +104,7 @@ static bool show_mba_info(unsigned long *bw_imc, unsigned long *bw_resc)
 
 		avg_bw_imc = sum_bw_imc / NUM_OF_RUNS;
 		avg_bw_resc = sum_bw_resc / NUM_OF_RUNS;
+
 		if (avg_bw_imc < THROTTLE_THRESHOLD || avg_bw_resc < THROTTLE_THRESHOLD) {
 			ksft_print_msg("Bandwidth below threshold (%d MiB). Dropping results from MBA schemata %u.\n",
 				       THROTTLE_THRESHOLD,
@@ -101,19 +112,31 @@ static bool show_mba_info(unsigned long *bw_imc, unsigned long *bw_resc)
 			continue;
 		}
 
+		avg_expect_imc = max_avg_bw_imc * (ALLOCATION_MIN + ALLOCATION_STEP * allocation) / ALLOCATION_MAX;
+		avg_expect_diff = (float)labs(avg_bw_imc - avg_expect_imc) / avg_expect_imc;
+		avg_expect_diff_per = (int)(avg_expect_diff * 100);
+
 		avg_diff = (float)labs(avg_bw_resc - avg_bw_imc) / avg_bw_imc;
 		avg_diff_per = (int)(avg_diff * 100);
 
 		ksft_print_msg("%s Check MBA diff within %d%% for schemata %u\n",
-			       avg_diff_per > MAX_DIFF_PERCENT ?
+			       (avg_diff_per > MAX_DIFF_PERCENT) ?
 			       "Fail:" : "Pass:",
 			       MAX_DIFF_PERCENT,
 			       ALLOCATION_MIN + ALLOCATION_STEP * allocation);
 
+		ksft_print_msg("%s Check MBA accuracy within %d%% for schemata %u actual %lu expected %lu max %lu\n",
+			       (avg_expect_diff_per > MAX_DIFF_PERCENT) ?
+			       "Fail:" : "Pass:",
+			       MAX_DIFF_PERCENT,
+			       ALLOCATION_MIN + ALLOCATION_STEP * allocation,
+			       avg_bw_imc, avg_expect_imc, max_avg_bw_imc);
+
 		ksft_print_msg("avg_diff_per: %d%%\n", avg_diff_per);
 		ksft_print_msg("avg_bw_imc: %lu\n", avg_bw_imc);
 		ksft_print_msg("avg_bw_resc: %lu\n", avg_bw_resc);
-		if (avg_diff_per > MAX_DIFF_PERCENT)
+		ksft_print_msg("avg_expected_diff_per: %d%%\n", avg_expect_diff_per);
+		if (avg_diff_per > MAX_DIFF_PERCENT || avg_expect_diff_per > MAX_DIFF_PERCENT)
 			ret = true;
 	}
 
