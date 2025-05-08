@@ -403,10 +403,17 @@ static int domain_setup_ctrlval(struct rdt_resource *r, struct rdt_ctrl_domain *
 {
 	struct rdt_hw_ctrl_domain *hw_dom = resctrl_to_arch_ctrl_dom(d);
 	struct rdt_hw_resource *hw_res = resctrl_to_arch_res(r);
+	int num_ctrl = hw_res->num_closid;
 	struct msr_param m;
 	u32 *dc;
 
-	dc = kmalloc_array(hw_res->num_closid, sizeof(*hw_dom->ctrl_val),
+	if (erdt_enabled()) {
+		int num_regions = min(QOS_NUM_L3_RMBM_EVENTS, acpi_mrrm_max_mem_region());
+
+		num_ctrl *= num_regions;
+	}
+
+	dc = kmalloc_array(num_ctrl, sizeof(*hw_dom->ctrl_val),
 			   GFP_KERNEL);
 	if (!dc)
 		return -ENOMEM;
