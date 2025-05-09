@@ -97,3 +97,13 @@ u32 resctrl_arch_get_config(struct rdt_resource *r, struct rdt_ctrl_domain *d,
 
 	return hw_dom->ctrl_val[idx];
 }
+
+u32 resctrl_arch_get_config_region(struct rdt_resource *r, struct rdt_ctrl_domain *d,
+				   u32 closid,
+				   int region)
+{
+	struct rdt_hw_ctrl_domain *hw_dom = resctrl_to_arch_ctrl_dom(d);
+	u32 idx = resctrl_get_config_index_region(closid, region);
+
+	return hw_dom->ctrl_val[idx];
+}
