@@ -938,7 +938,8 @@ bool resctrl_arch_is_evt_configurable(enum resctrl_event_id evt)
 
 static __init bool get_mem_config(void)
 {
-	struct rdt_hw_resource *hw_res = &rdt_resources_all[RDT_RESOURCE_MBA];
+	int res_idx = erdt_enabled() ? RDT_RESOURCE_RMBA : RDT_RESOURCE_MBA;
+	struct rdt_hw_resource *hw_res = &rdt_resources_all[res_idx];
 
 	if (!rdt_cpu_has(X86_FEATURE_MBA))
 		return false;
