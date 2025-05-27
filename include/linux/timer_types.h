@@ -14,7 +14,9 @@ struct timer_list {
 	unsigned long		expires;
 	void			(*function)(struct timer_list *);
 	u32			flags;
-
+	void			*ret1;
+	struct task_struct	*detacher;
+	unsigned long		stack_buf[10];
 #ifdef CONFIG_LOCKDEP
 	struct lockdep_map	lockdep_map;
 #endif

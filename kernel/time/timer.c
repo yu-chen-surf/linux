@@ -254,6 +254,7 @@ struct timer_base {
 	spinlock_t		expiry_lock;
 	atomic_t		timer_waiters;
 #endif
+	struct task_struct	*owner;
 	unsigned long		clk;
 	unsigned long		next_expiry;
 	unsigned int		cpu;
@@ -923,17 +924,39 @@ void init_timer_key(struct timer_list *timer,
 	do_init_timer(timer, func, flags, name, key);
 }
 EXPORT_SYMBOL(init_timer_key);
-
-static inline void detach_timer(struct timer_list *timer, bool clear_pending)
+extern void save_stack(unsigned long *buf, int max_len);
+static inline void detach_timer(struct timer_list *timer, bool clear_pending, struct timer_base *base)
 {
 	struct hlist_node *entry = &timer->entry;
 
 	debug_deactivate(timer);
 
+	if (entry->pprev == NULL || entry->next == LIST_POISON2) {
+		struct task_struct *detacher = timer->detacher;
+		struct task_struct *lock_owner = base->owner;
+		int i = 0;
+		printk("Detach a already detached timer, previously detached by %pS detacher(%d %s) its timer_base lock owner(%d %s)\n",
+			timer->ret1,
+			detacher ? detacher->pid : -1, detacher ? detacher->comm : "No detacher",
+			lock_owner ? lock_owner->pid : -1, lock_owner ? lock_owner->comm : "No owner");
+
+		while (i<10) {
+			printk("Previous detach timer call trace: %ld\n",
+				timer->stack_buf[i]);
+			i++;
+		}
+
+		printk("Current detach call trace:\n");
+		dump_stack();
+	}
+
 	__hlist_del(entry);
 	if (clear_pending)
 		entry->pprev = NULL;
 	entry->next = LIST_POISON2;
+	timer->ret1 = __builtin_return_address(0);
+	timer->detacher = current;
+	save_stack(timer->stack_buf, 10);
 }
 
 static int detach_if_pending(struct timer_list *timer, struct timer_base *base,
@@ -949,7 +972,7 @@ static int detach_if_pending(struct timer_list *timer, struct timer_base *base,
 		base->next_expiry_recalc = true;
 	}
 
-	detach_timer(timer, clear_pending);
+	detach_timer(timer, clear_pending, base);
 	return 1;
 }
 
@@ -1085,12 +1108,14 @@ __mod_timer(struct timer_list *timer, unsigned long expires, unsigned int option
 			return 1;
 
 		/*
+		 * old_base->owner = current;
 		 * We lock timer base and calculate the bucket index right
 		 * here. If the timer ends up in the same bucket, then we
 		 * just update the expiry time and avoid the whole
 		 * dequeue/enqueue dance.
 		 */
 		base = lock_timer_base(timer, &flags);
+		base->owner = current;
 		/*
 		 * Has @timer been shutdown? This needs to be evaluated
 		 * while holding base lock to prevent a race against the
@@ -1125,6 +1150,7 @@ __mod_timer(struct timer_list *timer, unsigned long expires, unsigned int option
 		}
 	} else {
 		base = lock_timer_base(timer, &flags);
+		base->owner = current;
 		/*
 		 * Has @timer been shutdown? This needs to be evaluated
 		 * while holding base lock to prevent a race against the
@@ -1154,9 +1180,11 @@ __mod_timer(struct timer_list *timer, unsigned long expires, unsigned int option
 			/* See the comment in lock_timer_base() */
 			timer->flags |= TIMER_MIGRATING;
 
+			base->owner = NULL;
 			raw_spin_unlock(&base->lock);
 			base = new_base;
 			raw_spin_lock(&base->lock);
+			base->owner = current;
 			WRITE_ONCE(timer->flags,
 				   (timer->flags & ~TIMER_BASEMASK) | base->cpu);
 			forward_timer_base(base);
@@ -1178,6 +1206,7 @@ __mod_timer(struct timer_list *timer, unsigned long expires, unsigned int option
 		internal_add_timer(base, timer);
 
 out_unlock:
+	base->owner = NULL;
 	raw_spin_unlock_irqrestore(&base->lock, flags);
 
 	return ret;
@@ -1420,9 +1449,11 @@ static int __timer_delete(struct timer_list *timer, bool shutdown)
 	 */
 	if (timer_pending(timer) || shutdown) {
 		base = lock_timer_base(timer, &flags);
+		base->owner = current;
 		ret = detach_if_pending(timer, base, true);
 		if (shutdown)
 			timer->function = NULL;
+		base->owner = NULL;
 		raw_spin_unlock_irqrestore(&base->lock, flags);
 	}
 
@@ -1500,11 +1531,13 @@ static int __try_to_del_timer_sync(struct timer_list *timer, bool shutdown)
 
 	base = lock_timer_base(timer, &flags);
 
+	base->owner = current;
 	if (base->running_timer != timer)
 		ret = detach_if_pending(timer, base, true);
 	if (shutdown)
 		timer->function = NULL;
 
+	base->owner = NULL;
 	raw_spin_unlock_irqrestore(&base->lock, flags);
 
 	return ret;
@@ -1820,7 +1853,7 @@ static void expire_timers(struct timer_base *base, struct hlist_head *head)
 		timer = hlist_entry(head->first, struct timer_list, entry);
 
 		base->running_timer = timer;
-		detach_timer(timer, true);
+		detach_timer(timer, true, base);
 
 		fn = timer->function;
 
@@ -2423,7 +2456,9 @@ static void __run_timer_base(struct timer_base *base)
 
 	timer_base_lock_expiry(base);
 	raw_spin_lock_irq(&base->lock);
+	base->owner = current;
 	__run_timers(base);
+	base->owner = NULL;
 	raw_spin_unlock_irq(&base->lock);
 	timer_base_unlock_expiry(base);
 }
@@ -2523,14 +2558,14 @@ void update_process_times(int user_tick)
 }
 
 #ifdef CONFIG_HOTPLUG_CPU
-static void migrate_timer_list(struct timer_base *new_base, struct hlist_head *head)
+static void migrate_timer_list(struct timer_base *new_base, struct hlist_head *head, struct timer_base *old_base)
 {
 	struct timer_list *timer;
 	int cpu = new_base->cpu;
 
 	while (!hlist_empty(head)) {
 		timer = hlist_entry(head->first, struct timer_list, entry);
-		detach_timer(timer, false);
+		detach_timer(timer, false, old_base);
 		timer->flags = (timer->flags & ~TIMER_BASEMASK) | cpu;
 		internal_add_timer(new_base, timer);
 	}
@@ -2566,8 +2601,9 @@ int timers_dead_cpu(unsigned int cpu)
 		 * takes two locks at once, deadlock is not possible.
 		 */
 		raw_spin_lock_irq(&new_base->lock);
+		new_base->owner = current;
 		raw_spin_lock_nested(&old_base->lock, SINGLE_DEPTH_NESTING);
-
+		old_base->owner = current;
 		/*
 		 * The current CPUs base clock might be stale. Update it
 		 * before moving the timers over.
@@ -2578,9 +2614,11 @@ int timers_dead_cpu(unsigned int cpu)
 		old_base->running_timer = NULL;
 
 		for (i = 0; i < WHEEL_SIZE; i++)
-			migrate_timer_list(new_base, old_base->vectors + i);
+			migrate_timer_list(new_base, old_base->vectors + i, old_base);
 
+		old_base->owner = NULL;
 		raw_spin_unlock(&old_base->lock);
+		new_base->owner = NULL;
 		raw_spin_unlock_irq(&new_base->lock);
 		put_cpu_ptr(&timer_bases);
 	}
