@@ -709,6 +709,7 @@ The value to set can be the result of ORing the following:
 0 NUMA_BALANCING_DISABLED
 1 NUMA_BALANCING_NORMAL
 2 NUMA_BALANCING_MEMORY_TIERING
+4 NUMA_BALANCING_CGROUP
 = =================================
 
 Or NUMA_BALANCING_NORMAL to optimize page placement among different
@@ -728,6 +729,8 @@ Or NUMA_BALANCING_MEMORY_TIERING to optimize page placement among
 different types of memory (represented as different NUMA nodes) to
 place the hot pages in the fast memory.  This is implemented based on
 unmapping and page fault too.
+
+Or NUMA_BALANCING_CGROUP to enable the per cgroup NUMA balancing.
 
 numa_balancing_promote_rate_limit_MBps
 ======================================
