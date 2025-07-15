@@ -133,7 +133,8 @@ static int logical_rmid_to_physical_rmid(int cpu, int lrmid)
 	return lrmid + (cpu_to_node(cpu) % snc_nodes_per_l3_cache) * r->num_rmid;
 }
 
-static int __rmid_read_phys(u32 prmid, enum resctrl_event_id eventid, u64 *val)
+static int __rmid_read_phys(u32 prmid, enum resctrl_event_id eventid, u64 *val,
+			    int domid)
 {
 	u64 msr_val;
 
@@ -186,7 +187,7 @@ void resctrl_arch_reset_rmid(struct rdt_resource *r, struct rdt_l3_mon_domain *d
 
 		prmid = logical_rmid_to_physical_rmid(cpu, rmid);
 		/* Record any initial, non-zero count value. */
-		__rmid_read_phys(prmid, eventid, &am->prev_mon_val);
+		__rmid_read_phys(prmid, eventid, &am->prev_mon_val, d->hdr.id);
 	}
 }
 
@@ -245,7 +246,7 @@ int resctrl_arch_rmid_read(struct rdt_resource *r, struct rdt_domain_hdr *hdr,
 	hw_dom = resctrl_to_arch_mon_dom(d);
 	hw_res = resctrl_to_arch_res(r);
 	prmid = logical_rmid_to_physical_rmid(cpu, rmid);
-	ret = __rmid_read_phys(prmid, eventid, &mon_val);
+	ret = __rmid_read_phys(prmid, eventid, &mon_val, d->hdr.id);
 	if (ret)
 		return ret;
 
