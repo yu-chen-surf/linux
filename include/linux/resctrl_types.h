@@ -47,6 +47,18 @@ enum resctrl_event_id {
 	QOS_L3_MBM_TOTAL_EVENT_ID	= 0x02,
 	QOS_L3_MBM_LOCAL_EVENT_ID	= 0x03,
 
+	/*
+	 * Region based MBM events.
+	 * at most 4 regions for now, these
+	 * 4 regions could be mapped to
+	 * different memory regions, including
+	 * local and remote regions.
+	 */
+	QOS_L3_MBM_R0_EVENT_ID,
+	QOS_L3_MBM_R1_EVENT_ID,
+	QOS_L3_MBM_R2_EVENT_ID,
+	QOS_L3_MBM_R3_EVENT_ID,
+
 	/* Intel Telemetry Events */
 	PMT_EVENT_ENERGY,
 	PMT_EVENT_ACTIVITY,
@@ -62,7 +74,17 @@ enum resctrl_event_id {
 	QOS_NUM_EVENTS,
 };
 
-#define QOS_NUM_L3_MBM_EVENTS	(QOS_L3_MBM_LOCAL_EVENT_ID - QOS_L3_MBM_TOTAL_EVENT_ID + 1)
+#define QOS_L3_MBM_MR  ((1U << QOS_L3_MBM_R0_EVENT_ID) | \
+			(1U << QOS_L3_MBM_R1_EVENT_ID) | \
+			(1U << QOS_L3_MBM_R2_EVENT_ID) | \
+			(1U << QOS_L3_MBM_R3_EVENT_ID))
+
+static inline bool rmbm_event(unsigned int e)
+{
+	return (e >= QOS_L3_MBM_R0_EVENT_ID) && (e <= QOS_L3_MBM_R3_EVENT_ID);
+}
+
+#define QOS_NUM_L3_MBM_EVENTS	(QOS_L3_MBM_R3_EVENT_ID - QOS_L3_MBM_TOTAL_EVENT_ID + 1)
 #define MBM_STATE_IDX(evt)	((evt) - QOS_L3_MBM_TOTAL_EVENT_ID)
 
 #endif /* __LINUX_RESCTRL_TYPES_H */
