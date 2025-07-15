@@ -35,7 +35,7 @@
  */
 struct arch_mbm_state {
 	u64	chunks;
-	u64	prev_msr;
+	u64	prev_mon_val;
 };
 
 /**
