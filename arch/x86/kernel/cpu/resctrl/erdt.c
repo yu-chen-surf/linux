@@ -93,8 +93,57 @@ static u64 erdt_read_l3_occupancy(struct erdt_domain_info *d, int rmid)
 
 	return l3_cmt_count * cmrc->up_scale;
 }
+
+static u64 erdt_read_region_mbm(struct erdt_domain_info *d, int rmid,
+				int region_idx)
+{
+	u64 blk_rmid, blk_offset, mbm_rmid_count = 0;
+	struct acpi_erdt_mmrc *mmrc = NULL;
+	void __iomem *vaddr;
+	int corr_factor_len;
+
+	mmrc = d->mmrc;
+	if (!mmrc || mmrc->index_fn != 1)
+		return 0;
+
+	/*
+	 * Block_to_locate_RMID# = floor((RMID# % 32) / 8) x 4 x 4096B;
+	 * Offset_within_this_Block = (floor(((RMID#/32)x8)+RMID#%8) x
+	 * 8B)+(Region# x 2048B);
+	 * MMIO_ADDRESS_for_RMID#_Region# =
+	 * MBM Register Block Base Address + Block_to_locate_RMID# +
+	 * Offset_within_this_Block;
+	 */
+	blk_rmid = ((rmid % 32) / 8) * 4 * 4096;
+	blk_offset = ((rmid / 32) * 8 + (rmid % 8)) * 8 + region_idx * 2048;
+	vaddr = d->base[ERDT_MMIO_MMRC_BASE] + blk_rmid + blk_offset;
+
+	mbm_rmid_count = readq(vaddr);
+
+	//verify if bit63 of mbm_rmid_count is 0
+	if (mbm_rmid_count & (1ULL << 63))
+		return 0;
+
+	mbm_rmid_count *= mmrc->up_scale;
+	corr_factor_len = mmrc->corr_factor_list_len;
+	if (corr_factor_len) {
+		if (corr_factor_len == 1)
+			mbm_rmid_count *= mmrc->corr_factor_list[0];
+		else
+			mbm_rmid_count *= mmrc->corr_factor_list[rmid];
+	}
+	//pr_info("Read  from mmio address 0x%lx\n", (unsigned long)vaddr);
+
+	return mbm_rmid_count;
+}
 #else
 static u64 erdt_read_l3_occupancy(struct erdt_domain_info *d, int rmid)
+{
+	return 0;
+}
+
+static u64 erdt_read_region_mbm(struct erdt_domain_info *d, int rmid,
+				int region_idx)
 {
 	return 0;
 }
@@ -122,6 +171,11 @@ u64 erdt_mon_read(int domid, int ev_id, int rmid)
 
 	if (ev_id == QOS_L3_OCCUP_EVENT_ID)
 		return erdt_read_l3_occupancy(d, rmid);
+
+	if (rmbm_event(ev_id))
+		return erdt_read_region_mbm(d,
+					    rmid,
+					    ev_id - QOS_L3_MBM_R0_EVENT_ID);
 
 	return 0;
 }
