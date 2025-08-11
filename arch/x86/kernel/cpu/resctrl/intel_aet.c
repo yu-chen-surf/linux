@@ -258,6 +258,10 @@ static int discover_events(struct event_group *e, struct pmt_feature_group *p)
 	else
 		r->num_rmid = e->num_rmids;
 
+	pr_info("%s %s monitoring detected\n", r->name, e->name);
+	r->mon_capable = true;
+	rdt_mon_capable = true;
+
 	return 0;
 }
 
