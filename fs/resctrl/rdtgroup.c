@@ -4116,6 +4116,11 @@ out_unlock:
  * During boot this may be called before global allocations have been made by
  * resctrl_mon_l3_resource_init().
  *
+ * This routine is called at resctrl init time. The number of supported RMIDs
+ * may be reduced if additional mon capable resources are enumerated at mount
+ * time. This means the rdt_l3_mon_domain::states[] allocations may be larger
+ * than needed.
+ *
  * Returns 0 for success, or -ENOMEM.
  */
 static int domain_setup_l3_mon_state(struct rdt_resource *r, struct rdt_l3_mon_domain *d)
