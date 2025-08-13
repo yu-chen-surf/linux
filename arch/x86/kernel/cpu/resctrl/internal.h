@@ -3,6 +3,7 @@
 #define _ASM_X86_RESCTRL_INTERNAL_H
 
 #include <linux/resctrl.h>
+#include <linux/acpi.h>
 
 #define L3_QOS_CDP_ENABLE		0x01ULL
 
@@ -200,5 +201,7 @@ static inline int intel_aet_read_event(int domid, int rmid, enum resctrl_event_i
 static inline void intel_aet_setup_mon_domain(int cpu, int id, struct rdt_resource *r,
 					      struct list_head *add_pos) { }
 #endif
+
+int erdt_init(void);
 
 #endif /* _ASM_X86_RESCTRL_INTERNAL_H */
