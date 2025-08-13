@@ -55,6 +55,7 @@ enum resctrl_res_level {
 	RDT_RESOURCE_MBA,
 	RDT_RESOURCE_SMBA,
 	RDT_RESOURCE_PERF_PKG,
+	RDT_RESOURCE_RMBA,
 
 	/* Must be the last */
 	RDT_NUM_RESOURCES,

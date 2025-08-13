@@ -108,6 +108,14 @@ struct rdt_hw_resource rdt_resources_all[RDT_NUM_RESOURCES] = {
 			.mon_domains		= mon_domain_init(RDT_RESOURCE_PERF_PKG),
 		},
 	},
+	[RDT_RESOURCE_RMBA] = {
+		.r_resctrl = {
+			.name			= "RMBA",
+			.ctrl_scope		= RESCTRL_L3_CACHE,
+			.ctrl_domains		= ctrl_domain_init(RDT_RESOURCE_RMBA),
+			.schema_fmt		= RESCTRL_SCHEMA_RANGE,
+		},
+	},
 };
 
 /**
