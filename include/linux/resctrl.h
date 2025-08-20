@@ -164,7 +164,7 @@ static inline bool domain_header_is_valid(struct rdt_domain_hdr *hdr,
 struct rdt_ctrl_domain {
 	struct rdt_domain_hdr		hdr;
 	struct pseudo_lock_region	*plr;
-	struct resctrl_staged_config	staged_config[CDP_NUM_TYPES];
+	struct resctrl_staged_config	staged_config[CDP_NUM_TYPES + QOS_NUM_L3_MBM_EVENTS];
 	u32				*mbps_val;
 };
 
@@ -447,6 +447,18 @@ static inline u32 resctrl_get_config_index(u32 closid,
 	case CDP_DATA:
 		return closid * 2;
 	}
+}
+
+static inline int resctrl_get_config_index_region(u32 closid,
+						  int region_idx)
+{
+	/*
+	 * Every clos has nr regions, which is provided by
+	 * the MRRM table.
+	 */
+	int nr = min(QOS_NUM_L3_RMBM_EVENTS, acpi_mrrm_max_mem_region());
+
+	return (closid * nr + region_idx);
 }
 
 bool resctrl_arch_get_cdp_enabled(enum resctrl_res_level l);
