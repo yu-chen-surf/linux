@@ -373,14 +373,16 @@ void rdt_ctrl_update(void *arg)
 static void setup_default_ctrlval(struct rdt_resource *r, u32 *dc)
 {
 	struct rdt_hw_resource *hw_res = resctrl_to_arch_res(r);
-	int i;
+	int i, num_ctrls = hw_res->num_closid;
 
+	if (r->rid == RDT_RESOURCE_RMBA)
+		num_ctrls *= acpi_mrrm_max_mem_region();
 	/*
 	 * Initialize the Control MSRs to having no control.
 	 * For Cache Allocation: Set all bits in cbm
 	 * For Memory Allocation: Set b/w requested to 100%
 	 */
-	for (i = 0; i < hw_res->num_closid; i++, dc++)
+	for (i = 0; i < num_ctrls; i++, dc++)
 		*dc = resctrl_get_default_ctrl(r);
 }
 
@@ -399,11 +401,59 @@ static void l3_mon_domain_free(struct rdt_hw_l3_mon_domain *hw_dom)
 	kfree(hw_dom);
 }
 
+/* flush all the buffer values to the hardware */
+static void flush_ctrlval_region(struct rdt_ctrl_domain *d, int closid,
+				 int region)
+{
+	struct rdt_hw_ctrl_domain *hw_dom = resctrl_to_arch_ctrl_dom(d);
+	int idx;
+
+	idx = resctrl_get_config_index_region(closid, region);
+	erdt_ctrl_update(d->hdr.id, hw_dom->ctrl_val[idx], closid, region);
+}
+
+void flush_ctrlval_regions(struct rdt_ctrl_domain *d, int closid)
+{
+	int num_regions = acpi_mrrm_max_mem_region(), i;
+
+	for (i = 0; i < num_regions; i++)
+		flush_ctrlval_region(d, closid, i);
+}
+
+/* copy the staging values in a region to the buffer */
+static void stage_ctrlval_region(struct rdt_ctrl_domain *d,
+				 int closid, int region)
+{
+	struct rdt_hw_ctrl_domain *hw_dom = resctrl_to_arch_ctrl_dom(d);
+	struct resctrl_staged_config *cfg;
+	int idx;
+
+	/* staged_config is per region */
+	cfg = &hw_dom->d_resctrl.staged_config[region];
+	if (!cfg->have_new_ctrl)
+		return;
+
+	/* ctrl_val is per (closid * region) */
+	idx = resctrl_get_config_index_region(closid, region);
+	if (cfg->new_ctrl == hw_dom->ctrl_val[idx])
+		return;
+
+	hw_dom->ctrl_val[idx] = cfg->new_ctrl;
+}
+
+void stage_ctrlval_regions(struct rdt_ctrl_domain *d, int closid)
+{
+	int num_regions = acpi_mrrm_max_mem_region(), i;
+
+	for (i = 0; i < num_regions; i++)
+		stage_ctrlval_region(d, closid, i);
+}
+
 static int domain_setup_ctrlval(struct rdt_resource *r, struct rdt_ctrl_domain *d)
 {
 	struct rdt_hw_ctrl_domain *hw_dom = resctrl_to_arch_ctrl_dom(d);
 	struct rdt_hw_resource *hw_res = resctrl_to_arch_res(r);
-	int num_ctrl = hw_res->num_closid;
+	int num_ctrl = hw_res->num_closid, num_clos = num_ctrl;
 	struct msr_param m;
 	u32 *dc;
 
@@ -425,7 +475,14 @@ static int domain_setup_ctrlval(struct rdt_resource *r, struct rdt_ctrl_domain *
 	m.dom = d;
 	m.low = 0;
 	m.high = hw_res->num_closid;
-	hw_res->msr_update(&m);
+	if (r->rid != RDT_RESOURCE_RMBA) {
+		hw_res->msr_update(&m);
+	} else {
+		int j;
+
+		for (j = 0; j < num_clos; j++)
+			flush_ctrlval_regions(d, j);
+	}
 	return 0;
 }
 

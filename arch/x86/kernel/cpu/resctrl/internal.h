@@ -203,5 +203,7 @@ static inline void intel_aet_setup_mon_domain(int cpu, int id, struct rdt_resour
 #endif
 
 int erdt_init(void);
+void flush_ctrlval_regions(struct rdt_ctrl_domain *d, int closid);
+void stage_ctrlval_regions(struct rdt_ctrl_domain *d, int closid);
 
 #endif /* _ASM_X86_RESCTRL_INTERNAL_H */

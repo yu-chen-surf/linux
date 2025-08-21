@@ -235,7 +235,11 @@ void resctrl_arch_reset_all_ctrls(struct rdt_resource *r)
 	struct rdt_hw_ctrl_domain *hw_dom;
 	struct msr_param msr_param;
 	struct rdt_ctrl_domain *d;
-	int i;
+	int i, num_ctrls = hw_res->num_closid;
+	bool is_rmba = (r->rid == RDT_RESOURCE_RMBA);
+
+	if (is_rmba)
+		num_ctrls *= acpi_mrrm_max_mem_region();
 
 	/* Walking r->domains, ensure it can't race with cpuhp */
 	lockdep_assert_cpus_held();
@@ -252,8 +256,12 @@ void resctrl_arch_reset_all_ctrls(struct rdt_resource *r)
 	list_for_each_entry(d, &r->ctrl_domains, hdr.list) {
 		hw_dom = resctrl_to_arch_ctrl_dom(d);
 
-		for (i = 0; i < hw_res->num_closid; i++)
+		for (i = 0; i < num_ctrls; i++)
 			hw_dom->ctrl_val[i] = resctrl_get_default_ctrl(r);
+
+		if (is_rmba)
+			continue;
+
 		msr_param.dom = d;
 		smp_call_function_any(&d->hdr.cpu_mask, rdt_ctrl_update, &msr_param, 1);
 	}
