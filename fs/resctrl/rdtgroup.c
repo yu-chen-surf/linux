@@ -3406,9 +3406,19 @@ static void rdtgroup_init_mba(struct rdt_resource *r, u32 closid)
 			continue;
 		}
 
-		cfg = &d->staged_config[CDP_NONE];
-		cfg->new_ctrl = resctrl_get_default_ctrl(r);
-		cfg->have_new_ctrl = true;
+		if (r->rid == RDT_RESOURCE_RMBA) {
+			int nr = min(QOS_NUM_L3_RMBM_EVENTS,
+				     acpi_mrrm_max_mem_region());
+			while (nr--) {
+				cfg = &d->staged_config[nr];
+				cfg->new_ctrl = resctrl_get_default_ctrl(r);
+				cfg->have_new_ctrl = true;
+			}
+		} else {
+			cfg = &d->staged_config[CDP_NONE];
+			cfg->new_ctrl = resctrl_get_default_ctrl(r);
+			cfg->have_new_ctrl = true;
+		}
 	}
 }
 
@@ -3424,7 +3434,8 @@ static int rdtgroup_init_alloc(struct rdtgroup *rdtgrp)
 	list_for_each_entry(s, &resctrl_schema_all, list) {
 		r = s->res;
 		if (r->rid == RDT_RESOURCE_MBA ||
-		    r->rid == RDT_RESOURCE_SMBA) {
+		    r->rid == RDT_RESOURCE_SMBA ||
+		    r->rid == RDT_RESOURCE_RMBA) {
 			rdtgroup_init_mba(r, rdtgrp->closid);
 			if (is_mba_sc(r))
 				continue;

@@ -55,6 +55,12 @@ int resctrl_arch_update_domains(struct rdt_resource *r, u32 closid)
 
 	list_for_each_entry(d, &r->ctrl_domains, hdr.list) {
 		hw_dom = resctrl_to_arch_ctrl_dom(d);
+		if (r->rid == RDT_RESOURCE_RMBA) {
+			stage_ctrlval_regions(d, closid);
+			flush_ctrlval_regions(d, closid);
+			continue;
+		}
+
 		msr_param.res = NULL;
 		for (t = 0; t < CDP_NUM_TYPES; t++) {
 			cfg = &hw_dom->d_resctrl.staged_config[t];
