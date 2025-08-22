@@ -80,9 +80,32 @@ static int parse_bw(struct rdt_parse_data *data, struct resctrl_schema *s,
 	struct resctrl_staged_config *cfg;
 	u32 closid = data->rdtgrp->closid;
 	struct rdt_resource *r = s->res;
+	bool rmba = (r->rid == RDT_RESOURCE_RMBA);
 	u32 bw_val;
 
-	cfg = &d->staged_config[s->conf_type];
+	if (rmba) {
+		const char *str;
+		int region, ret;
+
+		str = strchr(s->name, '_');
+		if (!str) {
+			rdt_last_cmd_printf("Invalid schemata name on domain %d\n",
+					    d->hdr.id);
+			return -EINVAL;
+		}
+
+		str++;
+		ret = kstrtoint(str, 10, &region);
+		if (ret) {
+			rdt_last_cmd_printf("Invalid schemata region on domain %d\n",
+					    d->hdr.id);
+			return -EINVAL;
+		}
+
+		cfg = &d->staged_config[region];
+	} else {
+		cfg = &d->staged_config[s->conf_type];
+	}
 	if (cfg->have_new_ctrl) {
 		rdt_last_cmd_printf("Duplicate domain %d\n", d->hdr.id);
 		return -EINVAL;
@@ -245,7 +268,8 @@ static int parse_line(char *line, struct resctrl_schema *s,
 		return -EINVAL;
 
 	if (rdtgrp->mode == RDT_MODE_PSEUDO_LOCKSETUP &&
-	    (r->rid == RDT_RESOURCE_MBA || r->rid == RDT_RESOURCE_SMBA)) {
+	    (r->rid == RDT_RESOURCE_MBA || r->rid == RDT_RESOURCE_SMBA ||
+	     r->rid == RDT_RESOURCE_RMBA)) {
 		rdt_last_cmd_puts("Cannot pseudo-lock MBA resource\n");
 		return -EINVAL;
 	}
