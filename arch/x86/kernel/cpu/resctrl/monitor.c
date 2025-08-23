@@ -138,6 +138,11 @@ static int __rmid_read_phys(u32 prmid, enum resctrl_event_id eventid, u64 *val,
 {
 	u64 msr_val;
 
+	if (erdt_enabled()) {
+		*val = erdt_mon_read(domid, eventid, prmid);
+		return 0;
+	}
+
 	/*
 	 * As per the SDM, when IA32_QM_EVTSEL.EvtID (bits 7:0) is configured
 	 * with a valid event code for supported resource type and the bits

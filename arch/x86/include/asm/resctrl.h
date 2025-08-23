@@ -41,6 +41,7 @@ struct resctrl_pqr_state {
 };
 
 bool erdt_enabled(void);
+u64 erdt_mon_read(int domid, int ev_id, int rmid);
 
 DECLARE_PER_CPU(struct resctrl_pqr_state, pqr_state);
 
