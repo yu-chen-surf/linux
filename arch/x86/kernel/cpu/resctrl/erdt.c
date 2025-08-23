@@ -161,6 +161,32 @@ static __init int parse_rmdd_entry(struct acpi_subtbl_hdr_16 *rmdd_hdr)
 	return 0;
 }
 
+#ifdef CONFIG_X86_64
+/**
+ * erdt_update_mmio_qword - Helper to safely update MMIO registers
+ * @addr: iomem address where update needs to happen
+ * @mask: bit position
+ * @value: actual value that needs to be updated in the position
+ */
+static inline void erdt_update_mmio_qword(void __iomem *addr, u64 mask, u64 value)
+{
+	u64 orig, updated;
+
+	/* Read 8 bytes (64 bits) */
+	orig = readq(addr);
+
+	/* Update: clear bits in mask, then set new value bits */
+	updated = (orig & ~mask) | (value & mask);
+
+	/* Write updated 8 bytes */
+	writeq(updated, addr);
+}
+#else
+static inline void erdt_update_mmio_qword(void __iomem *addr, u64 mask, u64 value)
+{
+}
+#endif
+
 /**
  * walk_erdt_subtables - Iterate over ERDT subtables and invoke a handler
  * @table:   Pointer to the full ACPI ERDT table

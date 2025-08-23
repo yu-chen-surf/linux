@@ -5,6 +5,10 @@
 #include <linux/resctrl.h>
 #include <linux/acpi.h>
 
+#define RMDD_CREG_MASK 0b100
+#define RMDD_CREG_ENABLE 0
+#define RMDD_CREG_DISABLE 1
+
 struct erdt_domain_info {
 	struct acpi_erdt_rmdd *rmdd;
 	struct acpi_erdt_cacd *cacd;
