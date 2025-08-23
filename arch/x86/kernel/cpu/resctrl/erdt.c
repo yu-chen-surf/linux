@@ -52,6 +52,80 @@ static __init int lookup_logical_cpu_by_x2apicid(u32 x2apicid)
 }
 #endif
 
+#ifdef CONFIG_X86_64
+/**
+ * erdt_read_l3_occupancy - Read L3 occupancy count for a given RMID
+ * @d:    Pointer to the ERDT domain info
+ * @rmid: Resource Monitoring ID to read occupancy for
+ *
+ * Calculates the MMIO address using clump and stride information
+ * from the CMRC ACPI structure and reads the L3 cache occupancy
+ * count for the given RMID. The raw value is scaled using the
+ * up_scale factor provided by firmware.
+ *
+ * Return: L3 occupancy value (scaled), or 0 on error.
+ */
+static u64 erdt_read_l3_occupancy(struct erdt_domain_info *d, int rmid)
+{
+	struct acpi_erdt_cmrc *cmrc;
+	void __iomem *vaddr;
+	u16 clump_size, stride_size;
+	u64 l3_cmt_count;
+
+	cmrc = d->cmrc;
+	if (!cmrc || cmrc->index_fn != 1)
+		return 0;
+
+	clump_size = cmrc->clump_size;
+	stride_size = cmrc->clump_stride;
+
+	/*
+	 * MMIO_ADDRESS_for_RMID# = CMRC Base +
+	 *   (RMID / ClumpSize) * Stride +
+	 *   (RMID % ClumpSize) * 8
+	 */
+	vaddr = d->base[ERDT_MMIO_CMRC_BASE] +
+		(rmid / clump_size) * stride_size +
+		(rmid % clump_size) * 8;
+
+	//pr_info("Read l3_cmt_count from mmio address 0x%lx\n", (unsigned long)vaddr);
+	l3_cmt_count = readq(vaddr);
+
+	return l3_cmt_count * cmrc->up_scale;
+}
+#else
+static u64 erdt_read_l3_occupancy(struct erdt_domain_info *d, int rmid)
+{
+	return 0;
+}
+#endif
+
+/**
+ * erdt_mon_read - Read monitoring data for a given domain and RMID
+ * @domid:  Domain ID from which to read monitoring data
+ * @ev_id:  Monitoring event ID (e.g. QOS_L3_OCCUP_EVENT_ID)
+ * @rmid:   Resource Monitoring ID for which to read the data
+ *
+ * Looks up the domain by domid and dispatches the read request
+ * to the appropriate helper based on the event type.
+ * Currently supports only L3 occupancy monitoring.
+ *
+ * Return: Monitoring data value (e.g. occupancy in bytes), or 0 on error.
+ */
+u64 erdt_mon_read(int domid, int ev_id, int rmid)
+{
+	struct erdt_domain_info *d;
+
+	d = xa_load(&erdt_domain_xa, domid);
+	if (!d)
+		return 0;
+
+	if (ev_id == QOS_L3_OCCUP_EVENT_ID)
+		return erdt_read_l3_occupancy(d, rmid);
+
+	return 0;
+}
+
 /**
  * get_l3_cache_id_from_cacd - Resolve L3 cache ID from CACD subtable
  * @cacd: Pointer to the ACPI ERDT CACD structure
