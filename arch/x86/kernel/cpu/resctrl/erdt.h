@@ -9,12 +9,24 @@
 #define RMDD_CREG_ENABLE 0
 #define RMDD_CREG_DISABLE 1
 
+enum erdt_mmio_type {
+	ERDT_MMIO_RMDD_CREG,
+	ERDT_MMIO_CMRC_BASE,
+	ERDT_MMIO_MMRC_BASE,
+	ERDT_MMIO_MARC_OPT,
+	ERDT_MMIO_MARC_MIN,
+	ERDT_MMIO_MARC_MAX,
+	ERDT_MMIO_MAX
+};
+
 struct erdt_domain_info {
 	struct acpi_erdt_rmdd *rmdd;
 	struct acpi_erdt_cacd *cacd;
 	struct acpi_erdt_cmrc *cmrc;
 	struct acpi_erdt_mmrc *mmrc;
 	struct acpi_erdt_marc *marc;
+	/* MMIO  address */
+	void __iomem *base[ERDT_MMIO_MAX];
 };
 
 struct erdt_table_info {
