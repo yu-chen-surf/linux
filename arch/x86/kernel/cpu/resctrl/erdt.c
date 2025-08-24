@@ -522,6 +522,9 @@ static __init int enumerate_erdt_table(struct acpi_table_header *table_hdr)
 				  ACPI_ERDT_TYPE_RMDD,
 				  parse_rmdd_entry);
 
+	if (!ret)
+		erdt_info.available = true;
+
 	return ret;
 }
 
