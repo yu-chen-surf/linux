@@ -410,22 +410,44 @@ static void show_doms(struct seq_file *s, struct resctrl_schema *schema, int clo
 {
 	struct rdt_resource *r = schema->res;
 	struct rdt_ctrl_domain *dom;
-	bool sep = false;
+	bool sep = false, rmba;
 	u32 ctrl_val;
+	int region = 0;
 
 	/* Walking r->domains, ensure it can't race with cpuhp */
 	lockdep_assert_cpus_held();
 
+	rmba = (r->rid == RDT_RESOURCE_RMBA);
+
 	seq_printf(s, "%*s:", max_name_width, schema->name);
+	if (rmba) {
+		const char *str;
+		int ret;
+
+		str = strchr(schema->name, '_');
+		if (str) {
+			str++;
+			/* the index is the region ID */
+			ret = kstrtoint(str, 10, &region);
+			/* unlikely to fail */
+			if (ret)
+				return;
+		}
+	}
+
 	list_for_each_entry(dom, &r->ctrl_domains, hdr.list) {
 		if (sep)
 			seq_puts(s, ";");
 
-		if (is_mba_sc(r))
+		if (is_mba_sc(r)) {
 			ctrl_val = dom->mbps_val[closid];
-		else
+		} else if (rmba) {
+			ctrl_val = resctrl_arch_get_config_region(r, dom, closid,
+								  region);
+		} else {
 			ctrl_val = resctrl_arch_get_config(r, dom, closid,
 							   schema->conf_type);
+		}
 
 		seq_printf(s, schema->fmt_str, dom->hdr.id, ctrl_val);
 		sep = true;
