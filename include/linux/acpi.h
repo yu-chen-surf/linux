@@ -777,6 +777,11 @@ const char *acpi_get_subsystem_id(acpi_handle handle);
 
 #ifdef CONFIG_ACPI_MRRM
 int acpi_mrrm_max_mem_region(void);
+#else
+static inline int acpi_mrrm_max_mem_region(void)
+{
+	return 1;
+}
 #endif
 
 #else	/* !CONFIG_ACPI */

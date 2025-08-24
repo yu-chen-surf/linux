@@ -7,6 +7,7 @@
 #include <linux/list.h>
 #include <linux/pid.h>
 #include <linux/resctrl_types.h>
+#include <linux/acpi.h>
 
 #ifdef CONFIG_ARCH_HAS_CPU_RESCTRL
 #include <asm/resctrl.h>
@@ -418,6 +419,8 @@ static inline bool resctrl_is_mbm_event(enum resctrl_event_id eventid)
  */
 void resctrl_arch_mon_event_config_write(void *config_info);
 
+#define for_each_rmbm_event(evt) \
+	for (evt = QOS_L3_MBM_R0_EVENT_ID; evt <= QOS_L3_MBM_R3_EVENT_ID; evt++)
 /**
  * resctrl_arch_mon_event_config_read() - Read the config for an event.
  * @config_info: struct resctrl_mon_config_info describing the resource, domain

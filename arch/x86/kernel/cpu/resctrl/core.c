@@ -994,6 +994,21 @@ static __init bool get_rdt_mon_resources(void)
 		resctrl_enable_mon_event(QOS_L3_OCCUP_EVENT_ID, false, 0, NULL);
 		ret = true;
 	}
+
+	if (erdt_enabled()) {
+		int i, max_regions = acpi_mrrm_max_mem_region();
+
+		for_each_rmbm_event(i) {
+			if (!max_regions--)
+				break;
+
+			resctrl_enable_mon_event(i, true, 0, NULL);
+		}
+
+		ret = true;
+		goto done;
+	}
+
 	if (rdt_cpu_has(X86_FEATURE_CQM_MBM_TOTAL)) {
 		resctrl_enable_mon_event(QOS_L3_MBM_TOTAL_EVENT_ID, false, 0, NULL);
 		ret = true;
@@ -1003,6 +1018,7 @@ static __init bool get_rdt_mon_resources(void)
 		ret = true;
 	}
 
+done:
 	if (!ret)
 		return false;
 
