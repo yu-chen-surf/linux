@@ -268,3 +268,63 @@ void resctrl_arch_reset_all_ctrls(struct rdt_resource *r)
 
 	return;
 }
+
+/* find the node that is mapped to the domain id */
+static int find_node_by_domain(int domid)
+{
+	int nid;
+
+	for_each_online_node(nid) {
+		int cpu = cpumask_first(cpumask_of_node(nid));
+		int id = get_cpu_cacheinfo_id(cpu, RESCTRL_L3_CACHE);
+
+		/* the node is found */
+		if (id == domid)
+			return nid;
+	}
+
+	return NUMA_NO_NODE;
+}
+
+bool resctrl_arch_get_info(struct resctrl_schema *s,
+                           char *p)
+{
+	struct rdt_resource *r = s->res;
+	struct rdt_ctrl_domain *d;
+	const char *str;
+	int region, len = 0;
+
+	if (r->rid != RDT_RESOURCE_RMBA)
+		return false;
+
+	str = strchr(s->name, '_');
+	if (!str)
+		return false;
+
+	str++;
+	if (kstrtoint(str, 10, &region))
+		return false;
+
+	guard(cpus_read_lock)();
+
+	/* display per domain information for this region */
+	list_for_each_entry(d, &r->ctrl_domains, hdr.list) {
+		/*
+		 * The RDT_RESOURCE_RMBA has the scope of
+		 * RESCTRL_L3_CACHE, so the domain id equals
+		 * to the LLC id. Use the LLC id to find the
+		 * corresponding NUMA id.
+		 * Get the string information for that region
+		 * associated with the NUMA node.
+		 */
+		int domid = d->hdr.id, nid;
+
+		nid = find_node_by_domain(domid);
+
+		if (nid != NUMA_NO_NODE)
+			len += acpi_mrrm_fill_info(p + len, region,
+						   nid, domid);
+	}
+
+	return true;
+}

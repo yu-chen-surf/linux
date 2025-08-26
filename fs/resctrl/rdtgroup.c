@@ -1170,6 +1170,19 @@ static int rdt_bw_gran_show(struct kernfs_open_file *of,
 	return 0;
 }
 
+static int rdt_bw_extra_show(struct kernfs_open_file *of,
+			    struct seq_file *seq, void *v)
+{
+	struct resctrl_schema *s = rdt_kn_parent_priv(of->kn);
+	/* should be enough */
+	char buf[256];
+
+	if (resctrl_arch_get_info(s, buf))
+		seq_printf(seq, "%s\n", buf);
+
+	return 0;
+}
+
 static int rdt_delay_linear_show(struct kernfs_open_file *of,
 				 struct seq_file *seq, void *v)
 {
@@ -1873,6 +1886,13 @@ static struct rftype res_common_files[] = {
 		.mode		= 0444,
 		.kf_ops		= &rdtgroup_kf_single_ops,
 		.seq_show	= rdt_bw_gran_show,
+		.fflags		= RFTYPE_CTRL_INFO | RFTYPE_RES_MB,
+	},
+	{
+		.name		= "bandwidth_extra",
+		.mode		= 0444,
+		.kf_ops		= &rdtgroup_kf_single_ops,
+		.seq_show	= rdt_bw_extra_show,
 		.fflags		= RFTYPE_CTRL_INFO | RFTYPE_RES_MB,
 	},
 	{

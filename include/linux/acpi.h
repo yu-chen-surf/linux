@@ -777,10 +777,19 @@ const char *acpi_get_subsystem_id(acpi_handle handle);
 
 #ifdef CONFIG_ACPI_MRRM
 int acpi_mrrm_max_mem_region(void);
+int acpi_mrrm_fill_info(char *str, int region, int node,
+			int domid);
 #else
 static inline int acpi_mrrm_max_mem_region(void)
 {
 	return 1;
+}
+
+static inline int acpi_mrrm_fill_info(char *str,
+				      int region, int node,
+				      int domid)
+{
+	return 0;
 }
 #endif
 

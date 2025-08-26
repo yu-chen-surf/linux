@@ -185,6 +185,7 @@ static inline u32 resctrl_arch_rmid_idx_encode(u32 ignored, u32 rmid)
 
 /* x86 can always read an rmid, nothing needs allocating */
 struct rdt_resource;
+struct resctrl_schema;
 static inline void *resctrl_arch_mon_ctx_alloc(struct rdt_resource *r,
 					       enum resctrl_event_id evtid)
 {
@@ -198,10 +199,18 @@ static inline void resctrl_arch_mon_ctx_free(struct rdt_resource *r,
 
 void resctrl_cpu_detect(struct cpuinfo_x86 *c);
 
+bool resctrl_arch_get_info(struct resctrl_schema *s,
+			   char *p);
 #else
 
 static inline void resctrl_arch_sched_in(struct task_struct *tsk) {}
 static inline void resctrl_cpu_detect(struct cpuinfo_x86 *c) {}
+
+static inline bool resctrl_arch_get_info(struct resctrl_schema *s,
+					 char *p)
+{
+	return false;
+}
 
 #endif /* CONFIG_X86_CPU_RESCTRL */
 

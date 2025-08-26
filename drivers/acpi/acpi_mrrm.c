@@ -52,6 +52,46 @@ static int get_node_num(struct mrrm_mem_range_entry *e)
 	return -ENOENT;
 }
 
+/*
+ * Figure what does region mean on this node,
+ * append the information to str.
+ * return the bytes written to the str.
+ */
+int acpi_mrrm_fill_info(char *str, int region, int node, int domid)
+{
+	struct mrrm_mem_range_entry *e;
+	int i, len = 0;
+	bool local = false, remote = false;
+
+	for (i = 0; i < mrrm_mem_entry_num; i++) {
+
+		e = mrrm_mem_range_entry + i;
+		if (e->node != node)
+			continue;
+
+		if (e->local_region_id == region) {
+			len += sprintf(str + len, "[dom%d][mem %#010Lx-%#010Lx] ",
+				       domid, e->base, (e->base + e->length));
+
+			if (!local)
+				local = true;
+		} else if (e->remote_region_id == region) {
+			len += sprintf(str + len, "[dom%d][mem %#010Lx-%#010Lx] ",
+				       domid, e->base, (e->base + e->length));
+
+			if (!remote)
+				remote = true;
+		}
+	}
+
+	if (local)
+		len += sprintf(str + len, " [local socket access]");
+	else if (remote)
+		len += sprintf(str + len, " [remote socket access]");
+
+	return len;
+}
+
 static __init int acpi_parse_mrrm(struct acpi_table_header *table)
 {
 	struct acpi_mrrm_mem_range_entry *mre_entry;
