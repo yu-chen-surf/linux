@@ -529,6 +529,31 @@ static inline void __init_node_memory_type(int node, struct memory_dev_type *mem
 	}
 }
 
+/* save the tier level of this node */
+static int node_tier_level[MAX_NUMNODES];
+static int search_tier_level_node(int node)
+{
+	struct memory_tier *memtier, *mt = __node_get_memory_tier(node);
+	int l = 0;
+
+	if (!mt)
+		return 0;
+
+	list_for_each_entry(memtier, &memory_tiers, list) {
+		if (mt == memtier)
+			return l;
+		l++;
+	}
+
+	return l;
+}
+
+int get_tier_level_node(int node);
+int get_tier_level_node(int node)
+{
+	return node_tier_level[node];
+}
+
 static struct memory_tier *set_node_memory_tier(int node)
 {
 	struct memory_tier *memtier;
@@ -558,6 +583,9 @@ static struct memory_tier *set_node_memory_tier(int node)
 	memtier = find_create_memory_tier(memtype);
 	if (!IS_ERR(memtier))
 		rcu_assign_pointer(pgdat->memtier, memtier);
+
+	node_tier_level[node] = search_tier_level_node(node);
+
 	return memtier;
 }
 
@@ -600,6 +628,8 @@ static bool clear_node_memory_tier(int node)
 		}
 		cleared = true;
 	}
+	node_tier_level[node] = search_tier_level_node(node);
+
 	return cleared;
 }
 
