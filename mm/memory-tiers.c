@@ -51,6 +51,48 @@ static const struct bus_type memory_tier_subsys = {
 	.dev_name = "memory_tier",
 };
 
+static struct memory_tier *__node_get_memory_tier(int node);
+/* contains the tier level for each NUMA node */
+static int numa_tier_level[MAX_NUMNODES];
+int get_numa_tier_level(int node)
+{
+	return numa_tier_level[node];
+}
+/*
+ * memory_tiers list is sorted from near to far,
+ * use this list to create the mapping between
+ * NUMA node and its corresponding tier level.
+ * Other components uses get_numa_tier_level()
+ * to get the tier level for a specific node
+ * in O(1).
+ *
+ * Whenever the memory_tiers list has been
+ * modified, the locked_update_numa_tier_level()
+ * should be invoked to update the mapping.
+ */
+static void locked_update_numa_tier_level(void)
+{
+	int node;
+
+	lockdep_assert_held_once(&memory_tier_lock);
+
+	for_each_node_state(node, N_MEMORY) {
+		struct memory_tier *node_memtier =
+			__node_get_memory_tier(node), *memtier;
+		int level = 0;
+
+		if (!node_memtier)
+			continue;
+
+		/* find the memtier position in the memory_tiers list */
+		list_for_each_entry(memtier, &memory_tiers, list) {
+			level++;
+			if (memtier == node_memtier)
+				numa_tier_level[node] = level;
+		}
+	}
+}
+
 #ifdef CONFIG_NUMA_BALANCING
 /**
  * folio_use_access_time - check if a folio reuses cpupid for page access time
@@ -556,8 +598,10 @@ static struct memory_tier *set_node_memory_tier(int node)
 	memtype = node_memory_types[node].memtype;
 	node_set(node, memtype->nodes);
 	memtier = find_create_memory_tier(memtype);
-	if (!IS_ERR(memtier))
+	if (!IS_ERR(memtier)) {
 		rcu_assign_pointer(pgdat->memtier, memtier);
+		locked_update_numa_tier_level();
+	}
 	return memtier;
 }
 
@@ -595,8 +639,10 @@ static bool clear_node_memory_tier(int node)
 		node_clear(node, memtype->nodes);
 		if (nodes_empty(memtype->nodes)) {
 			list_del_init(&memtype->tier_sibling);
-			if (list_empty(&memtier->memory_types))
+			if (list_empty(&memtier->memory_types)) {
 				destroy_memory_tier(memtier);
+				locked_update_numa_tier_level();
+			}
 		}
 		cleared = true;
 	}

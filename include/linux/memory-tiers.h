@@ -72,7 +72,7 @@ static inline bool node_is_toptier(int node)
 	return true;
 }
 #endif
-
+int get_numa_tier_level(int node);
 #else
 
 #define numa_demotion_enabled	false
@@ -151,5 +151,11 @@ static inline struct memory_dev_type *mt_find_alloc_memory_type(int adist,
 static inline void mt_put_memory_types(struct list_head *memory_types)
 {
 }
+
+static inline int get_numa_tier_level(int node)
+{
+	return 0;
+}
+
 #endif	/* CONFIG_NUMA */
 #endif  /* _LINUX_MEMORY_TIERS_H */
