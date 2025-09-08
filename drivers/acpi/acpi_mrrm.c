@@ -13,6 +13,7 @@
 #include <linux/init.h>
 #include <linux/string.h>
 #include <linux/sysfs.h>
+#include <linux/memory-tiers.h>
 
 /* Default assume one memory region covering all system memory, per the spec */
 static int max_mem_region = 1;
@@ -29,6 +30,12 @@ struct mrrm_mem_range_entry {
 	int node;
 	u8  local_region_id;
 	u8  remote_region_id;
+};
+
+struct mrrm_tier_info {
+	char *name; /*lowercase name*/
+	char *cname;/*uppercase name*/
+	int region;
 };
 
 static struct mrrm_mem_range_entry *mrrm_mem_range_entry;
@@ -50,6 +57,91 @@ static int get_node_num(struct mrrm_mem_range_entry *e)
 	}
 
 	return -ENOENT;
+}
+
+#define MRRM_TIER_ENTRY(n, cn)	\
+	{.name = n, .cname = cn}
+
+static struct mrrm_tier_info mt[] = {
+	MRRM_TIER_ENTRY("local", "LOCAL"),
+	MRRM_TIER_ENTRY("tier2_local", "TIER2_LOCAL"),
+	MRRM_TIER_ENTRY("tier3_local", "TIER3_LOCAL"),
+	MRRM_TIER_ENTRY("tier4_local", "TIER4_LOCAL"),
+	MRRM_TIER_ENTRY("remote", "REMOTE"),
+	MRRM_TIER_ENTRY("tier2_remote", "TIER2_REMOTE"),
+	MRRM_TIER_ENTRY("tier3_remote", "TIER3_REMOTE"),
+	MRRM_TIER_ENTRY("tier4_remote", "TIER4_REMOTE"),
+};
+
+/*
+ * Given the region id, return the display name
+ * for this region, meanwhile save the corresponding
+ * region id in global mt array for future query.
+ * @region:	the region ID
+ * @cap:	return capital format name
+ */
+char *get_mrrm_region_name(int region, bool cap)
+{
+	struct mrrm_mem_range_entry *mre = NULL;
+	int loc = -1, nid, offset, level;
+	/*
+	 * 1. Figure out if the region id is local or
+	 *    remote by iterating the mrrm entries to
+	 *    to find the mrrm entry whose local_id/remote_id
+	 *    matches the region id.
+	 * 2. Find the corresponding node of this mrrm entry.
+	 * 3. Find the tier level based on the node's abstract
+	 *    distance from HMAT(via memory tier subsystem).
+	 */
+	for (int i = 0; i < mrrm_mem_entry_num; i++) {
+		mre = mrrm_mem_range_entry + i;
+		if (region == mre->local_region_id) {
+			loc = 0;
+			break;
+		} else if (region == mre->remote_region_id) {
+			loc = 1;
+			break;
+		}
+	}
+
+	if (!mre || loc == -1)
+		return NULL;
+
+	nid = get_node_num(mre);
+	if (nid < 0)
+		return NULL;
+
+	level = get_numa_tier_level(nid);
+	/* currently 4 regions are supported */
+	offset = loc * 4 + level;
+
+	/* save the region id */
+	mt[offset].region = region;
+
+	/* return the user-friendly name */
+	if (cap)
+		return mt[offset].cname;
+	else
+		return mt[offset].name;
+}
+
+/* get the region id for the region's user friendly name */
+int get_region_id_from_name(char *name, bool cap)
+{
+	int len = ARRAY_SIZE(mt), i;
+
+	for (i = 0; i < len; i++) {
+		char *p;
+
+		if (!cap)
+			p = mt[i].name;
+		else
+			p = mt[i].cname;
+		if (!strcmp(p, name))
+			return mt[i].region;
+	}
+
+	return -1;
 }
 
 static __init int acpi_parse_mrrm(struct acpi_table_header *table)

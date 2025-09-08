@@ -777,6 +777,8 @@ const char *acpi_get_subsystem_id(acpi_handle handle);
 
 #ifdef CONFIG_ACPI_MRRM
 int acpi_mrrm_max_mem_region(void);
+char *get_mrrm_region_name(int region, bool cap);
+int get_region_id_from_name(char *name, bool cap);
 #endif
 
 #else	/* !CONFIG_ACPI */
@@ -1102,6 +1104,16 @@ static inline acpi_handle acpi_get_processor_handle(int cpu)
 static inline int acpi_mrrm_max_mem_region(void)
 {
 	return 1;
+}
+
+static inline char *get_mrrm_region_name(int region, bool cap)
+{
+	return NULL;
+}
+
+static inline int get_region_id_from_name(char *name, bool cap)
+{
+	return 0;
 }
 
 #endif	/* !CONFIG_ACPI */
