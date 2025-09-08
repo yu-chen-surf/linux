@@ -13,6 +13,7 @@
 #include <linux/init.h>
 #include <linux/string.h>
 #include <linux/sysfs.h>
+#include <linux/memory-tiers.h>
 
 /* Default assume one memory region covering all system memory, per the spec */
 static int max_mem_region = 1;
@@ -50,6 +51,60 @@ static int get_node_num(struct mrrm_mem_range_entry *e)
 	}
 
 	return -ENOENT;
+}
+
+static char *region_names[] = {
+	"tier1_local",
+	"tier2_local",
+	"tier3_local",
+	"tier4_local",
+	"tier1_remote",
+	"tier2_remote",
+	"tier3_remote",
+	"tier4_remote",
+	NULL,
+};
+
+/*
+ * Given the region id, return the display name
+ * for this region.
+ */
+char *get_mrrm_region_name(int region);
+char *get_mrrm_region_name(int region)
+{
+	struct mrrm_mem_range_entry *mre = NULL;
+	int loc = -1, nid, offset, level;
+	/*
+	 * 1. Figure out if the region id is local or
+	 *    remote by iterating the mrrm entries to
+	 *    to find the mrrm entry whose local_id/remote_id
+	 *    matches the region id.
+	 * 2. Find the corresponding node of this mrrm entry.
+	 * 3. Find the tier level based on the node's abstract
+	 *    distance from HMAT.
+	 */
+	for (int i = 0; i < mrrm_mem_entry_num; i++) {
+		mre = mrrm_mem_range_entry + i;
+		if (region == mre->local_region_id) {
+			loc = 1;
+			break;
+		} else if (region == mre->remote_region_id) {
+			loc = 0;
+			break;
+		}
+	}
+
+	if (!mre || loc == -1)
+		return NULL;
+
+	nid = get_node_num(mre);
+	if (nid < 0)
+		return NULL;
+
+	level = get_numa_tier_level(nid);
+	offset = loc * 4 + level;
+
+	return region_names[offset];
 }
 
 static __init int acpi_parse_mrrm(struct acpi_table_header *table)
