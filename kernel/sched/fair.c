@@ -9644,6 +9644,11 @@ static inline int task_is_ineligible_on_dst_cpu(struct task_struct *p, int dest_
 	return 0;
 }
 
+#ifdef CONFIG_SCHED_CACHE
+static bool can_migrate_llc_task(int src_cpu, int dst_cpu,
+				 struct task_struct *p);
+#endif
+
 /*
  * can_migrate_task - may task p from runqueue rq be migrated to this_cpu?
  */
@@ -9738,6 +9743,12 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
 	 */
 	if (env->flags & LBF_ACTIVE_LB)
 		return 1;
+
+#ifdef CONFIG_SCHED_CACHE
+	if (sched_cache_enabled() &&
+	    !can_migrate_llc_task(env->src_cpu, env->dst_cpu, p))
+		return 0;
+#endif
 
 	degrades = migrate_degrades_locality(p, env);
 	if (!degrades)
@@ -9996,6 +10007,17 @@ static int detach_tasks(struct lb_env *env)
 		 */
 		if (env->imbalance <= 0)
 			break;
+
+#ifdef CONFIG_SCHED_CACHE
+		/*
+		 * Don't detach more tasks if remaining tasks want to stay:
+		 * The tasks have already been sorted by order_tasks_by_llc(),
+		 * they are tasks that prefer the current LLC.
+		 */
+		if (sched_cache_enabled() && p->preferred_llc != -1 &&
+		    llc_id(env->src_cpu) == p->preferred_llc)
+			break;
+#endif
 
 		continue;
 next:
@@ -10839,8 +10861,8 @@ static bool can_migrate_llc(int src_cpu, int dst_cpu,
  * Check if task p can migrated from src_cpu to dst_cpu
  * in terms of cache aware load balance.
  */
-static __maybe_unused bool can_migrate_llc_task(int src_cpu, int dst_cpu,
-						struct task_struct *p)
+static bool can_migrate_llc_task(int src_cpu, int dst_cpu,
+				 struct task_struct *p)
 {
 	struct mm_struct *mm;
 	bool to_pref = false;
