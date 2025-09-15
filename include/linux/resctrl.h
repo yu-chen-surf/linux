@@ -7,6 +7,7 @@
 #include <linux/list.h>
 #include <linux/pid.h>
 #include <linux/resctrl_types.h>
+#include <linux/acpi.h>
 
 #ifdef CONFIG_ARCH_HAS_CPU_RESCTRL
 #include <asm/resctrl.h>
@@ -387,6 +388,8 @@ void resctrl_enable_mon_event(enum resctrl_event_id eventid, bool any_cpu,
 			      unsigned int binary_bits, void *arch_priv);
 
 bool resctrl_is_mon_event_enabled(enum resctrl_event_id eventid);
+void resctrl_set_mon_event_name(enum resctrl_event_id eventid,
+				char *name);
 
 bool resctrl_arch_is_evt_configurable(enum resctrl_event_id evt);
 
@@ -418,6 +421,8 @@ static inline bool resctrl_is_mbm_event(enum resctrl_event_id eventid)
  */
 void resctrl_arch_mon_event_config_write(void *config_info);
 
+#define for_each_rmbm_event(evt) \
+	for (evt = QOS_L3_MBM_R0_EVENT_ID; evt <= QOS_L3_MBM_R3_EVENT_ID; evt++)
 /**
  * resctrl_arch_mon_event_config_read() - Read the config for an event.
  * @config_info: struct resctrl_mon_config_info describing the resource, domain

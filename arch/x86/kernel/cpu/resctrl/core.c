@@ -985,6 +985,22 @@ static __init bool get_rdt_alloc_resources(void)
 	return ret;
 }
 
+static void erdt_resctrl_enable_mon_event(enum resctrl_event_id eventid)
+{
+	int region = RMBM_STATE_IDX(eventid);
+	char *new_name = get_mrrm_region_name(region, false);
+
+	if (!new_name)
+		return;
+
+	/*
+	 * Replace the old display name by the new name which
+	 * better reflects the locality and memory tiering.
+	 */
+	resctrl_set_mon_event_name(eventid, new_name);
+	resctrl_enable_mon_event(eventid, true, 0, NULL);
+}
+
 static __init bool get_rdt_mon_resources(void)
 {
 	struct rdt_resource *r = &rdt_resources_all[RDT_RESOURCE_L3].r_resctrl;
@@ -994,6 +1010,21 @@ static __init bool get_rdt_mon_resources(void)
 		resctrl_enable_mon_event(QOS_L3_OCCUP_EVENT_ID, false, 0, NULL);
 		ret = true;
 	}
+
+	if (erdt_enabled()) {
+		int i, max_regions = acpi_mrrm_max_mem_region();
+
+		for_each_rmbm_event(i) {
+			if (!max_regions--)
+				break;
+
+			erdt_resctrl_enable_mon_event(i);
+		}
+
+		ret = true;
+		goto done;
+	}
+
 	if (rdt_cpu_has(X86_FEATURE_CQM_MBM_TOTAL)) {
 		resctrl_enable_mon_event(QOS_L3_MBM_TOTAL_EVENT_ID, false, 0, NULL);
 		ret = true;
@@ -1003,6 +1034,7 @@ static __init bool get_rdt_mon_resources(void)
 		ret = true;
 	}
 
+done:
 	if (!ret)
 		return false;
 

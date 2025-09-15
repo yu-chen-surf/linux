@@ -852,6 +852,13 @@ void free_rmid_lru_list(void)
 }
 
 /*
+ * The name field will be replaced by the information
+ * of local/remote and tiering at runtime.
+ */
+#define MON_REGION_EVENT(id)			\
+	MON_EVENT(QOS_L3_MBM_R##id##_EVENT_ID,	\
+	"mbm_region_" #id "_bytes", RDT_RESOURCE_L3, false)
+/*
  * All available events. Architecture code marks the ones that
  * are supported by a system using resctrl_enable_mon_event()
  * to set .enabled.
@@ -869,7 +876,25 @@ struct mon_evt mon_event_all[QOS_NUM_EVENTS] = {
 	MON_EVENT(PMT_EVENT_AUTO_C6_RES,		"c6_res",		RDT_RESOURCE_PERF_PKG,	false),
 	MON_EVENT(PMT_EVENT_UNHALTED_REF_CYCLES,	"unhalted_ref_cycles",	RDT_RESOURCE_PERF_PKG,	false),
 	MON_EVENT(PMT_EVENT_UOPS_RETIRED,		"uops_retired",		RDT_RESOURCE_PERF_PKG,	false),
+	MON_REGION_EVENT(0),
+	MON_REGION_EVENT(1),
+	MON_REGION_EVENT(2),
+	MON_REGION_EVENT(3),
 };
+
+void resctrl_set_mon_event_name(enum resctrl_event_id eventid,
+				char *name)
+{
+	char temp[32];
+	char *p;
+
+	snprintf(temp, sizeof(temp), "mbm_%s_bytes", name);
+	p = kstrdup(temp, GFP_KERNEL);
+	if (!p)
+		return;
+
+	mon_event_all[eventid].name = p;
+}
 
 void resctrl_enable_mon_event(enum resctrl_event_id eventid, bool any_cpu,
 			      unsigned int binary_bits, void *arch_priv)
