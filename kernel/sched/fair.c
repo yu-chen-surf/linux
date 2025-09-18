@@ -1243,6 +1243,7 @@ static bool exceed_llc_capacity(struct mm_struct *mm, int cpu)
 	struct cacheinfo *l3_leaf;
 	unsigned long rss;
 	unsigned int llc;
+	int scale;
 
 	/*
 	 * get_cpu_cacheinfo_level() can not be used
@@ -1262,7 +1263,11 @@ static bool exceed_llc_capacity(struct mm_struct *mm, int cpu)
 	rss = get_mm_counter(mm, MM_ANONPAGES) +
 		get_mm_counter(mm, MM_SHMEMPAGES);
 
-	return (llc <= (rss * PAGE_SIZE));
+	scale = get_sched_cache_rss_scale();
+	if (scale == INT_MAX)
+		return false;
+
+	return ((llc * scale) <= (rss * PAGE_SIZE));
 }
 
 static bool exceed_llc_nr(struct mm_struct *mm, int cpu)
@@ -10839,7 +10844,6 @@ sched_reduced_capacity(struct rq *rq, struct sched_domain *sd)
 }
 
 #ifdef CONFIG_SCHED_CACHE
-__read_mostly unsigned int sysctl_llc_aggr_cap       = 50;
 __read_mostly unsigned int sysctl_llc_aggr_imb       = 20;
 
 /*
@@ -10851,7 +10855,7 @@ __read_mostly unsigned int sysctl_llc_aggr_imb       = 20;
  * (default: ~50%)
  */
 #define fits_llc_capacity(util, max)	\
-	((util) * 100 < (max) * sysctl_llc_aggr_cap)
+	((util) * 100 < (max) * get_sched_cache_cap_scale())
 
 /*
  * The margin used when comparing utilization.
