@@ -10506,6 +10506,30 @@ sched_reduced_capacity(struct rq *rq, struct sched_domain *sd)
 }
 
 #ifdef CONFIG_SCHED_CACHE
+__read_mostly unsigned int sysctl_llc_aggr_cap       = 50;
+__read_mostly unsigned int sysctl_llc_aggr_imb       = 20;
+
+/*
+ * The margin used when comparing LLC utilization with CPU capacity.
+ * Parameter sysctl_llc_aggr_cap determines the LLC load level where
+ * active LLC aggregation is done.
+ * Derived from fits_capacity().
+ *
+ * (default: ~50%)
+ */
+#define fits_llc_capacity(util, max)	\
+	((util) * 100 < (max) * sysctl_llc_aggr_cap)
+
+/*
+ * The margin used when comparing utilization.
+ * is 'util1' noticeably greater than 'util2'
+ * Derived from capacity_greater().
+ * Bias is in perentage.
+ */
+/* Allows dst util to be bigger than src util by up to bias percent */
+#define util_greater(util1, util2) \
+	((util1) * 100 > (util2) * (100 + sysctl_llc_aggr_imb))
+
 /* Called from load balancing paths with rcu_read_lock held */
 static __maybe_unused bool get_llc_stats(int cpu, unsigned long *util,
 					 unsigned long *cap)
@@ -10517,9 +10541,79 @@ static __maybe_unused bool get_llc_stats(int cpu, unsigned long *util,
 		return false;
 
 	*util = READ_ONCE(sd_share->util_avg);
-	*cap = per_cpu(sd_llc_size, cpu) * SCHED_CAPACITY_SCALE;
+	*cap = READ_ONCE(sd_share->capacity);
 
 	return true;
+}
+
+/* can we do task aggregation across LLC */
+static bool can_migrate_llc(int src_cpu, int dst_cpu,
+			    unsigned long tsk_util,
+			    bool to_pref)
+{
+	unsigned long src_util, dst_util, src_cap, dst_cap;
+
+	if (!get_llc_stats(src_cpu, &src_util, &src_cap) ||
+	    !get_llc_stats(dst_cpu, &dst_util, &dst_cap))
+		return false;
+
+	if (!fits_llc_capacity(dst_util, dst_cap) &&
+	    !fits_llc_capacity(src_util, src_cap))
+		return false;
+
+	src_util = src_util < tsk_util ? 0 : src_util - tsk_util;
+	dst_util = dst_util + tsk_util;
+	if (to_pref) {
+		/*
+		 * sysctl_llc_aggr_imb is the imbalance allowed between
+		 * preferred LLC and non-preferred LLC.
+		 * Don't migrate if we will get preferred LLC too
+		 * heavily loaded and if the dest is much busier
+		 * than the src, in which case migration will
+		 * increase the imbalance too much.
+		 */
+		if (!fits_llc_capacity(dst_util, dst_cap) &&
+		    util_greater(dst_util, src_util))
+			return false;
+	} else {
+		/*
+		 * Don't migrate if we will leave preferred LLC
+		 * too idle, or if this migration leads to the
+		 * non-preferred LLC falls within sysctl_aggr_imb percent
+		 * of preferred LLC, leading to migration again
+		 * back to preferred LLC.
+		 */
+		if (fits_llc_capacity(src_util, src_cap) ||
+		    !util_greater(src_util, dst_util))
+			return false;
+	}
+	return true;
+}
+
+/*
+ * Check if task p can migrated from src_cpu to dst_cpu
+ * in terms of cache aware load balance.
+ */
+static __maybe_unused bool can_migrate_llc_task(int src_cpu, int dst_cpu,
+						struct task_struct *p)
+{
+	struct mm_struct *mm;
+	bool to_pref = false;
+	int cpu;
+
+	mm = p->mm;
+	if (!mm)
+		return true;
+
+	cpu = mm->mm_sched_cpu;
+	if (cpu < 0)
+		return true;
+
+	if (cpus_share_cache(dst_cpu, cpu))
+		to_pref = true;
+
+	return can_migrate_llc(src_cpu, dst_cpu,
+			       task_util(p), to_pref);
 }
 
 /*
