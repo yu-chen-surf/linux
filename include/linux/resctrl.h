@@ -167,7 +167,7 @@ static inline bool domain_header_is_valid(struct rdt_domain_hdr *hdr,
 struct rdt_ctrl_domain {
 	struct rdt_domain_hdr		hdr;
 	struct pseudo_lock_region	*plr;
-	struct resctrl_staged_config	staged_config[CDP_NUM_TYPES];
+	struct resctrl_staged_config	staged_config[CDP_NUM_TYPES + QOS_NUM_L3_MBA_REGIONS];
 	u32				*mbps_val;
 };
 
