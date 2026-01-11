@@ -105,12 +105,14 @@ struct rdt_perf_pkg_mon_domain {
  * @dom:       The domain to update
  * @low:       Beginning index from base MSR
  * @high:      End index
+ * @region:    Region number if region aware RDT is enabled
  */
 struct hw_param {
 	struct rdt_resource	*res;
 	struct rdt_ctrl_domain	*dom;
 	u32			low;
 	u32			high;
+	int			region;
 };
 
 /**

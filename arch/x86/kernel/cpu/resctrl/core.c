@@ -226,10 +226,7 @@ static __init bool __get_mem_config_intel(struct rdt_resource *r)
 	cpuid_count(0x00000010, 3, &eax.full, &ebx, &ecx, &edx.full);
 	hw_res->num_closid = edx.split.cos_max + 1;
 	max_delay = eax.split.max_delay + 1;
-	/*
-	 * TBD: region aware hardware max could be 255.
-	 */
-	r->membw.max_bw = MAX_MBA_BW;
+	r->membw.max_bw = rmba ? MAX_MBA_REGION_BW : MAX_MBA_BW;
 	r->membw.arch_needs_linear = true;
 	if (ecx & MBA_IS_LINEAR) {
 		r->membw.delay_linear = true;
@@ -369,6 +366,32 @@ static void cat_wrmsr(struct hw_param *m)
 
 	for (i = m->low; i < m->high; i++)
 		wrmsrq(hw_res->msr_base + i, hw_dom->ctrl_val[i]);
+}
+
+static u32 region_bw_map(unsigned long bw, struct rdt_resource *r)
+{
+	if (r->membw.delay_linear)
+		return clamp(bw, 1, MAX_MBA_REGION_BW);
+
+	/*
+	 * map [1,100] to [1,255] if the user manipulates "MB"
+	 * (u32)((bw - 1) * (MAX_MBA_REGION_BW - 1) / (MAX_MBA_BW - 1) + 1)
+	 *
+	 */
+	return MAX_MBA_REGION_BW;
+}
+
+static void mba_region_intel(struct hw_param *m)
+{
+	struct rdt_hw_ctrl_domain *hw_dom = resctrl_to_arch_ctrl_dom(m->dom);
+	unsigned int i;
+
+	for (i = m->low; i < m->high; i++) {
+		u32 ctrl = hw_dom->ctrl_val[i];
+
+		erdt_ctrl_update(m->dom->hdr.id, region_bw_map(ctrl, m->res),
+				 i, m->region);
+	}
 }
 
 u32 resctrl_arch_get_num_closid(struct rdt_resource *r)
@@ -1084,6 +1107,8 @@ static __init void rdt_init_res_defs_intel(void)
 		} else if (r->rid == RDT_RESOURCE_MBA) {
 			hw_res->msr_base = MSR_IA32_MBA_THRTL_BASE;
 			hw_res->hw_update = mba_wrmsr_intel;
+		} else if (RESOURCE_IS_MBA_REGION(r->rid)) {
+			hw_res->hw_update = mba_region_intel;
 		}
 	}
 }

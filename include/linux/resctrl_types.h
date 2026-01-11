@@ -10,6 +10,8 @@
 #define MAX_MBA_BW			100u
 #define MBM_OVERFLOW_INTERVAL		1000
 
+#define MAX_MBA_REGION_BW		255u
+
 /* Reads to Local DRAM Memory */
 #define READS_TO_LOCAL_MEM		BIT(0)
 
