@@ -38,7 +38,7 @@
  */
 struct arch_mbm_state {
 	u64	chunks;
-	u64	prev_msr;
+	u64	prev_mon_val;
 };
 
 /* Setting bit 0 in L3_QOS_EXT_CFG enables the ABMC feature. */
