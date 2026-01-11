@@ -255,7 +255,12 @@ void resctrl_arch_reset_all_ctrls(struct rdt_resource *r)
 		for (i = 0; i < hw_res->num_closid; i++)
 			hw_dom->ctrl_val[i] = resctrl_get_default_ctrl(r);
 		hw_param.dom = d;
-		smp_call_function_any(&d->hdr.cpu_mask, rdt_ctrl_update, &hw_param, 1);
+		if (RESOURCE_IS_MBA_REGION(r->rid)) {
+			hw_param.region = MBA_REGION_IDX(r->rid);
+			hw_res->hw_update(&hw_param);
+		} else {
+			smp_call_function_any(&d->hdr.cpu_mask, rdt_ctrl_update, &hw_param, 1);
+		}
 	}
 
 	return;

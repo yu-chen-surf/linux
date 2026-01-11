@@ -456,6 +456,7 @@ static int domain_setup_ctrlval(struct rdt_resource *r, struct rdt_ctrl_domain *
 	m.dom = d;
 	m.low = 0;
 	m.high = hw_res->num_closid;
+	m.region = RESOURCE_IS_MBA_REGION(r->rid) ? MBA_REGION_IDX(r->rid) : 0;
 	hw_res->hw_update(&m);
 	return 0;
 }
