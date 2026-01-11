@@ -93,4 +93,9 @@ static inline bool rmbm_event(unsigned int e)
 #define QOS_NUM_L3_MBM_EVENTS	(QOS_L3_MBM_R3_EVENT_ID - QOS_L3_MBM_TOTAL_EVENT_ID + 1)
 #define MBM_STATE_IDX(evt)	((evt) - QOS_L3_MBM_TOTAL_EVENT_ID)
 
+#define QOS_NUM_L3_MBA_REGIONS (RDT_RESOURCE_MBA_R3 - RDT_RESOURCE_MBA_R0 + 1)
+#define MBA_REGION_IDX(rid)    ((rid) - RDT_RESOURCE_MBA_R0)
+
+#define RESOURCE_IS_MBA_REGION(rid) ((rid) >= RDT_RESOURCE_MBA_R0 && (rid) <= RDT_RESOURCE_MBA_R3)
+
 #endif /* __LINUX_RESCTRL_TYPES_H */

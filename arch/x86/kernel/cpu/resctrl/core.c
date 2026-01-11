@@ -57,6 +57,16 @@ static void mba_wrmsr_amd(struct hw_param *m);
 #define ctrl_domain_init(id) LIST_HEAD_INIT(rdt_resources_all[id].r_resctrl.ctrl_domains)
 #define mon_domain_init(id) LIST_HEAD_INIT(rdt_resources_all[id].r_resctrl.mon_domains)
 
+#define MBA_REGION(n)							\
+[RDT_RESOURCE_MBA_R##n] = {						\
+	.r_resctrl = {							\
+		.name = "MB",						\
+		.ctrl_scope = RESCTRL_L3_CACHE,				\
+		.ctrl_domains = ctrl_domain_init(RDT_RESOURCE_MBA_R##n),	\
+		.schema_fmt = RESCTRL_SCHEMA_RANGE,			\
+	},								\
+}
+
 struct rdt_hw_resource rdt_resources_all[RDT_NUM_RESOURCES] = {
 	[RDT_RESOURCE_L3] =
 	{
@@ -108,6 +118,10 @@ struct rdt_hw_resource rdt_resources_all[RDT_NUM_RESOURCES] = {
 			.mon_domains		= mon_domain_init(RDT_RESOURCE_PERF_PKG),
 		},
 	},
+	MBA_REGION(0),
+	MBA_REGION(1),
+	MBA_REGION(2),
+	MBA_REGION(3),
 };
 
 /**
