@@ -100,13 +100,13 @@ struct rdt_perf_pkg_mon_domain {
 };
 
 /**
- * struct msr_param - set a range of MSRs from a domain
+ * struct hw_param - set a range of registers(MSRs, eg) from a domain
  * @res:       The resource to use
  * @dom:       The domain to update
  * @low:       Beginning index from base MSR
  * @high:      End index
  */
-struct msr_param {
+struct hw_param {
 	struct rdt_resource	*res;
 	struct rdt_ctrl_domain	*dom;
 	u32			low;
@@ -122,7 +122,7 @@ struct msr_param {
  *			with struct resctrl_schema's property of the same name,
  *			which has been corrected for features like CDP.
  * @msr_base:		Base MSR address for CBMs
- * @msr_update:		Function pointer to update QOS MSRs
+ * @hw_update:		Function pointer to update QOS hardware, MSRs, etc
  * @mon_scale:		cqm counter * mon_scale = occupancy in bytes
  * @mbm_width:		Monitor width, to detect and correct for overflow.
  * @cdp_enabled:	CDP state of this resource
@@ -131,13 +131,13 @@ struct msr_param {
  *
  * Members of this structure are either private to the architecture
  * e.g. mbm_width, or accessed via helpers that provide abstraction. e.g.
- * msr_update and msr_base.
+ * hw_update and msr_base.
  */
 struct rdt_hw_resource {
 	struct rdt_resource	r_resctrl;
 	u32			num_closid;
 	unsigned int		msr_base;
-	void			(*msr_update)(struct msr_param *m);
+	void			(*hw_update)(struct hw_param *m);
 	unsigned int		mon_scale;
 	unsigned int		mbm_width;
 	bool			cdp_enabled;

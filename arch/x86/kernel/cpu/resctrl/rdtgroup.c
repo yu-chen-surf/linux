@@ -233,16 +233,16 @@ void resctrl_arch_reset_all_ctrls(struct rdt_resource *r)
 {
 	struct rdt_hw_resource *hw_res = resctrl_to_arch_res(r);
 	struct rdt_hw_ctrl_domain *hw_dom;
-	struct msr_param msr_param;
+	struct hw_param hw_param;
 	struct rdt_ctrl_domain *d;
 	int i;
 
 	/* Walking r->domains, ensure it can't race with cpuhp */
 	lockdep_assert_cpus_held();
 
-	msr_param.res = r;
-	msr_param.low = 0;
-	msr_param.high = hw_res->num_closid;
+	hw_param.res = r;
+	hw_param.low = 0;
+	hw_param.high = hw_res->num_closid;
 
 	/*
 	 * Disable resource control for this resource by setting all
@@ -254,8 +254,8 @@ void resctrl_arch_reset_all_ctrls(struct rdt_resource *r)
 
 		for (i = 0; i < hw_res->num_closid; i++)
 			hw_dom->ctrl_val[i] = resctrl_get_default_ctrl(r);
-		msr_param.dom = d;
-		smp_call_function_any(&d->hdr.cpu_mask, rdt_ctrl_update, &msr_param, 1);
+		hw_param.dom = d;
+		smp_call_function_any(&d->hdr.cpu_mask, rdt_ctrl_update, &hw_param, 1);
 	}
 
 	return;
