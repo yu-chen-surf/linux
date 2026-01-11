@@ -221,16 +221,20 @@ static __init bool __get_mem_config_intel(struct rdt_resource *r)
 	union cpuid_0x10_3_eax eax;
 	union cpuid_0x10_x_edx edx;
 	u32 ebx, ecx, max_delay;
+	bool rmba = RESOURCE_IS_MBA_REGION(r->rid);
 
 	cpuid_count(0x00000010, 3, &eax.full, &ebx, &ecx, &edx.full);
 	hw_res->num_closid = edx.split.cos_max + 1;
 	max_delay = eax.split.max_delay + 1;
+	/*
+	 * TBD: region aware hardware max could be 255.
+	 */
 	r->membw.max_bw = MAX_MBA_BW;
 	r->membw.arch_needs_linear = true;
 	if (ecx & MBA_IS_LINEAR) {
 		r->membw.delay_linear = true;
-		r->membw.min_bw = MAX_MBA_BW - max_delay;
-		r->membw.bw_gran = MAX_MBA_BW - max_delay;
+		r->membw.min_bw = rmba ? 1 : (MAX_MBA_BW - max_delay);
+		r->membw.bw_gran = rmba ? 1 : (MAX_MBA_BW - max_delay);
 	} else {
 		if (!rdt_get_mb_table(r))
 			return false;
@@ -906,6 +910,27 @@ bool resctrl_arch_is_evt_configurable(enum resctrl_event_id evt)
 	}
 }
 
+/* region aware RDT MBA config */
+static __init bool get_region_mem_config(void)
+{
+	struct rdt_hw_resource *hw_res;
+	int num_regions;
+
+	if (!erdt_enabled() || !rdt_cpu_has(X86_FEATURE_MBA) ||
+	    boot_cpu_data.x86_vendor != X86_VENDOR_INTEL)
+		return false;
+
+	num_regions = min(QOS_NUM_L3_MBA_REGIONS, acpi_mrrm_max_mem_region());
+
+	for (int i = RDT_RESOURCE_MBA_R0; i < (num_regions + RDT_RESOURCE_MBA_R0); i++) {
+		hw_res = &rdt_resources_all[i];
+		if (!__get_mem_config_intel(&hw_res->r_resctrl))
+			return false;
+	}
+
+	return true;
+}
+
 static __init bool get_mem_config(void)
 {
 	struct rdt_hw_resource *hw_res = &rdt_resources_all[RDT_RESOURCE_MBA];
@@ -963,6 +988,9 @@ static __init bool get_rdt_alloc_resources(void)
 			rdt_get_cdp_l2_config();
 		ret = true;
 	}
+
+	if (get_region_mem_config())
+		return true;
 
 	if (get_mem_config())
 		ret = true;

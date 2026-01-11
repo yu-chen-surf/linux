@@ -1628,7 +1628,8 @@ static int rdtgroup_size_show(struct kernfs_open_file *of,
 								       closid,
 								       type);
 				if (r->rid == RDT_RESOURCE_MBA ||
-				    r->rid == RDT_RESOURCE_SMBA)
+				    r->rid == RDT_RESOURCE_SMBA ||
+				    RESOURCE_IS_MBA_REGION(r->rid))
 					size = ctrl;
 				else
 					size = rdtgroup_cbm_to_size(r, d, ctrl);
