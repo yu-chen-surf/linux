@@ -172,3 +172,11 @@ int resctrl_arch_io_alloc_enable(struct rdt_resource *r, bool enable)
 
 	return 0;
 }
+
+u32 resctrl_arch_get_region_config(struct rdt_resource *r, struct rdt_ctrl_domain *d,
+				   u32 closid)
+{
+	struct rdt_hw_ctrl_domain *hw_dom = resctrl_to_arch_ctrl_dom(d);
+
+	return hw_dom->ctrl_val[closid];
+}

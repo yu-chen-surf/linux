@@ -405,11 +405,14 @@ static void show_doms(struct seq_file *s, struct resctrl_schema *schema,
 		if (sep)
 			seq_puts(s, ";");
 
-		if (is_mba_sc(r))
+		if (is_mba_sc(r)) {
 			ctrl_val = dom->mbps_val[closid];
-		else
+		} else if (RESOURCE_IS_MBA_REGION(r->rid)) {
+			ctrl_val = resctrl_arch_get_region_config(r, dom, closid);
+		} else {
 			ctrl_val = resctrl_arch_get_config(r, dom, closid,
 							   schema->conf_type);
+		}
 
 		seq_printf(s, schema->fmt_str, dom->hdr.id, ctrl_val);
 		sep = true;
