@@ -361,7 +361,7 @@ struct rdt_resource *resctrl_arch_get_resource(enum resctrl_res_level l);
  */
 struct resctrl_schema {
 	struct list_head		list;
-	char				name[8];
+	char				name[32];
 	const char			*fmt_str;
 	enum resctrl_conf_type		conf_type;
 	struct rdt_resource		*res;
