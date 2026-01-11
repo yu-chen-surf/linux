@@ -41,43 +41,52 @@ int resctrl_arch_update_one(struct rdt_resource *r, struct rdt_ctrl_domain *d,
 	return 0;
 }
 
-int resctrl_arch_update_domains(struct rdt_resource *r, u32 closid)
+static void resctrl_arch_update_msr(struct rdt_resource *r, u32 closid,
+				   struct rdt_ctrl_domain *d,
+				   struct rdt_hw_ctrl_domain *hw_dom)
 {
 	struct resctrl_staged_config *cfg;
-	struct rdt_hw_ctrl_domain *hw_dom;
 	struct hw_param hw_param;
-	struct rdt_ctrl_domain *d;
 	enum resctrl_conf_type t;
 	u32 idx;
+
+	hw_param.res = NULL;
+	for (t = 0; t < CDP_NUM_TYPES; t++) {
+		cfg = &hw_dom->d_resctrl.staged_config[t];
+		if (!cfg->have_new_ctrl)
+			continue;
+
+		idx = resctrl_get_config_index(closid, t);
+		if (cfg->new_ctrl == hw_dom->ctrl_val[idx])
+			continue;
+		hw_dom->ctrl_val[idx] = cfg->new_ctrl;
+
+		if (!hw_param.res) {
+			hw_param.low = idx;
+			hw_param.high = hw_param.low + 1;
+			hw_param.res = r;
+			hw_param.dom = d;
+		} else {
+			hw_param.low = min(hw_param.low, idx);
+			hw_param.high = max(hw_param.high, idx + 1);
+		}
+	}
+
+	if (hw_param.res)
+		smp_call_function_any(&d->hdr.cpu_mask, rdt_ctrl_update, &hw_param, 1);
+}
+
+int resctrl_arch_update_domains(struct rdt_resource *r, u32 closid)
+{
+	struct rdt_hw_ctrl_domain *hw_dom;
+	struct rdt_ctrl_domain *d;
 
 	/* Walking r->domains, ensure it can't race with cpuhp */
 	lockdep_assert_cpus_held();
 
 	list_for_each_entry(d, &r->ctrl_domains, hdr.list) {
 		hw_dom = resctrl_to_arch_ctrl_dom(d);
-		hw_param.res = NULL;
-		for (t = 0; t < CDP_NUM_TYPES; t++) {
-			cfg = &hw_dom->d_resctrl.staged_config[t];
-			if (!cfg->have_new_ctrl)
-				continue;
-
-			idx = resctrl_get_config_index(closid, t);
-			if (cfg->new_ctrl == hw_dom->ctrl_val[idx])
-				continue;
-			hw_dom->ctrl_val[idx] = cfg->new_ctrl;
-
-			if (!hw_param.res) {
-				hw_param.low = idx;
-				hw_param.high = hw_param.low + 1;
-				hw_param.res = r;
-				hw_param.dom = d;
-			} else {
-				hw_param.low = min(hw_param.low, idx);
-				hw_param.high = max(hw_param.high, idx + 1);
-			}
-		}
-		if (hw_param.res)
-			smp_call_function_any(&d->hdr.cpu_mask, rdt_ctrl_update, &hw_param, 1);
+		resctrl_arch_update_msr(r, closid, d, hw_dom);
 	}
 
 	return 0;
