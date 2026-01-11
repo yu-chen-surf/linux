@@ -41,6 +41,35 @@ int resctrl_arch_update_one(struct rdt_resource *r, struct rdt_ctrl_domain *d,
 	return 0;
 }
 
+static void resctrl_arch_update_regions(struct rdt_resource *r, u32 closid,
+					struct rdt_ctrl_domain *d,
+					struct rdt_hw_ctrl_domain *hw_dom)
+{
+	struct rdt_hw_resource *hw_res = resctrl_to_arch_res(r);
+	int region = MBA_REGION_IDX(r->rid);
+	struct resctrl_staged_config *cfg;
+	struct hw_param hw_param;
+	u32 new_ctrl;
+
+	cfg = &hw_dom->d_resctrl.staged_config[region];
+	if (!cfg->have_new_ctrl)
+		return;
+
+	new_ctrl = cfg->new_ctrl;
+	if (new_ctrl == hw_dom->ctrl_val[closid])
+		return;
+
+	hw_dom->ctrl_val[closid] = new_ctrl;
+
+	hw_param.res = r;
+	hw_param.dom = d;
+	hw_param.low = closid;
+	hw_param.high = closid + 1;
+	hw_param.region = region;
+
+	hw_res->hw_update(&hw_param);
+}
+
 static void resctrl_arch_update_msr(struct rdt_resource *r, u32 closid,
 				   struct rdt_ctrl_domain *d,
 				   struct rdt_hw_ctrl_domain *hw_dom)
@@ -86,7 +115,10 @@ int resctrl_arch_update_domains(struct rdt_resource *r, u32 closid)
 
 	list_for_each_entry(d, &r->ctrl_domains, hdr.list) {
 		hw_dom = resctrl_to_arch_ctrl_dom(d);
-		resctrl_arch_update_msr(r, closid, d, hw_dom);
+		if (RESOURCE_IS_MBA_REGION(r->rid))
+			resctrl_arch_update_regions(r, closid, d, hw_dom);
+		else
+			resctrl_arch_update_msr(r, closid, d, hw_dom);
 	}
 
 	return 0;
