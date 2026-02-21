@@ -122,10 +122,23 @@ void rdt_staged_configs_clear(void)
 	}
 }
 
+static bool resctrl_is_rmbm_enabled(void)
+{
+	enum resctrl_event_id evt;
+
+	for_each_rmbm_event_id(evt) {
+		if (resctrl_is_mon_event_enabled(evt))
+			return true;
+	}
+
+	return false;
+}
+
 static bool resctrl_is_mbm_enabled(void)
 {
 	return (resctrl_is_mon_event_enabled(QOS_L3_MBM_TOTAL_EVENT_ID) ||
-		resctrl_is_mon_event_enabled(QOS_L3_MBM_LOCAL_EVENT_ID));
+		resctrl_is_mon_event_enabled(QOS_L3_MBM_LOCAL_EVENT_ID) ||
+		resctrl_is_rmbm_enabled());
 }
 
 /*

@@ -424,7 +424,7 @@ bool resctrl_arch_is_evt_configurable(enum resctrl_event_id evt);
 static inline bool resctrl_is_mbm_event(enum resctrl_event_id eventid)
 {
 	return (eventid >= QOS_L3_MBM_TOTAL_EVENT_ID &&
-		eventid <= QOS_L3_MBM_LOCAL_EVENT_ID);
+	        eventid <= QOS_L3_MBM_R3_EVENT_ID);
 }
 
 u32 resctrl_get_mon_evt_cfg(enum resctrl_event_id eventid);
@@ -432,7 +432,11 @@ u32 resctrl_get_mon_evt_cfg(enum resctrl_event_id eventid);
 /* Iterate over all memory bandwidth events */
 #define for_each_mbm_event_id(eventid)				\
 	for (eventid = QOS_L3_MBM_TOTAL_EVENT_ID;		\
-	     eventid <= QOS_L3_MBM_LOCAL_EVENT_ID; eventid++)
+	     eventid <= QOS_L3_MBM_R3_EVENT_ID; eventid++)
+
+#define for_each_rmbm_event_id(eventid)				\
+	for (eventid = QOS_L3_MBM_R0_EVENT_ID;		\
+	     eventid <= QOS_L3_MBM_R3_EVENT_ID; eventid++)
 
 /* Iterate over memory bandwidth arrays in domain structures */
 #define for_each_mbm_idx(idx)					\

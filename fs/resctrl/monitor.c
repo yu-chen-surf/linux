@@ -769,6 +769,17 @@ static void mbm_update_one_event(struct rdt_resource *r, struct rdt_l3_mon_domai
 		resctrl_arch_mon_ctx_free(rr.r, evtid, rr.arch_mon_ctx);
 }
 
+static void rmbm_update(struct rdt_resource *r, struct rdt_l3_mon_domain *d,
+			struct rdtgroup *rdtgrp)
+{
+	enum resctrl_event_id evt;
+
+	for_each_mbm_event_id(evt) {
+		if (resctrl_is_mon_event_enabled(evt))
+			mbm_update_one_event(r, d, rdtgrp, evt);
+	}
+}
+
 static void mbm_update(struct rdt_resource *r, struct rdt_l3_mon_domain *d,
 		       struct rdtgroup *rdtgrp)
 {
@@ -781,6 +792,8 @@ static void mbm_update(struct rdt_resource *r, struct rdt_l3_mon_domain *d,
 
 	if (resctrl_is_mon_event_enabled(QOS_L3_MBM_LOCAL_EVENT_ID))
 		mbm_update_one_event(r, d, rdtgrp, QOS_L3_MBM_LOCAL_EVENT_ID);
+
+	rmbm_update(r, d, rdtgrp);
 }
 
 /*
