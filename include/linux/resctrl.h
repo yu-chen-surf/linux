@@ -7,6 +7,7 @@
 #include <linux/list.h>
 #include <linux/pid.h>
 #include <linux/resctrl_types.h>
+#include <linux/acpi.h>
 
 #ifdef CONFIG_ARCH_HAS_CPU_RESCTRL
 #include <asm/resctrl.h>
@@ -453,6 +454,8 @@ u32 resctrl_get_mon_evt_cfg(enum resctrl_event_id eventid);
  * Called via IPI to reach a CPU that is a member of the specified domain.
  */
 void resctrl_arch_mon_event_config_write(void *config_info);
+
+bool erdt_enable_mon(void);
 
 /**
  * resctrl_arch_mon_event_config_read() - Read the config for an event.

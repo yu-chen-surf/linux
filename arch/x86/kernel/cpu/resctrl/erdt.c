@@ -110,7 +110,7 @@ static int erdt_read_region_mbm(struct rdt_domain_hdr *hdr,
 				int eventid, u64 *val)
 {
 	u64 blk_rmid, blk_offset, mbm_rmid_count = 0, chunks = 0;
-	int region_idx = eventid - QOS_L3_MBM_R0_EVENT_ID;
+	int region_idx = RMBM_STATE_IDX(eventid);
 	int corr_factor_len, corr_factor = 0;
 	struct rdt_hw_l3_mon_domain *hw_dom;
 	struct acpi_erdt_mmrc *mmrc = NULL;
