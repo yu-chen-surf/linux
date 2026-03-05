@@ -257,4 +257,8 @@ static inline bool intel_handle_aet_option(bool force_off, char *tok) { return f
 int erdt_init(void);
 void erdt_exit(void);
 
+u64 mbm_overflow_count(u64 prev_val, u64 cur_val, unsigned int width);
+struct arch_mbm_state *get_arch_mbm_state(struct rdt_hw_l3_mon_domain *hw_dom,
+					  u32 rmid,
+					  enum resctrl_event_id eventid);
 #endif /* _ASM_X86_RESCTRL_INTERNAL_H */
