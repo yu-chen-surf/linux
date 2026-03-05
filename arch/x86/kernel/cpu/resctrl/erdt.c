@@ -581,6 +581,8 @@ static __init int enumerate_erdt_table(struct acpi_table_header *table_hdr)
 		subtbl = (void *)subtbl + subtbl->length;
 	}
 
+	erdt_info.available = true;
+
 	return 0;
 
 cleanup:
