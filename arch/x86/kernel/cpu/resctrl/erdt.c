@@ -173,6 +173,22 @@ static bool cmrc_init(struct erdt_domain_info *d, struct acpi_subtbl_hdr_16 *sub
 	return !!d->base[ERDT_MMIO_CMRC_BASE];
 }
 
+static bool mmrc_init(struct erdt_domain_info *d, struct acpi_subtbl_hdr_16 *subtbl)
+{
+	struct acpi_erdt_mmrc *mmrc = (struct acpi_erdt_mmrc *)subtbl;
+
+	if (mmrc->index_fn != VALID_VERSION) {
+		pr_info("Unknown MMRC index function %d\n", mmrc->index_fn);
+		return false;
+	}
+
+	d->mmrc = mmrc;
+	d->base[ERDT_MMIO_MMRC_BASE] = erdt_ioremap_checked(mmrc->reg_base,
+							    mmrc->reg_size, "CMRC base");
+
+	return !!d->base[ERDT_MMIO_MMRC_BASE];
+}
+
 static __init bool parse_rmdd_entry(struct acpi_subtbl_hdr_16 *rmdd_hdr)
 {
 	struct acpi_erdt_rmdd *rmdd = (struct acpi_erdt_rmdd *)rmdd_hdr;
@@ -211,6 +227,10 @@ static __init bool parse_rmdd_entry(struct acpi_subtbl_hdr_16 *rmdd_hdr)
 		case ACPI_ERDT_TYPE_CMRC:
 			if (cmrc_init(domain_info, subtbl))
 				subtbl_mask |= BIT(ACPI_ERDT_TYPE_CMRC);
+			break;
+		case ACPI_ERDT_TYPE_MMRC:
+			if (mmrc_init(domain_info, subtbl))
+				subtbl_mask |= BIT(ACPI_ERDT_TYPE_MMRC);
 			break;
 		default:
 			break;
