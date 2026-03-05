@@ -184,9 +184,13 @@ void resctrl_arch_reset_rmid(struct rdt_resource *r, struct rdt_l3_mon_domain *d
 	if (am) {
 		memset(am, 0, sizeof(*am));
 
-		prmid = logical_rmid_to_physical_rmid(cpu, rmid);
-		/* Record any initial, non-zero count value. */
-		__rmid_read_phys(prmid, eventid, &am->prev_mon_val);
+		if (erdt_enabled()) {
+			erdt_mon_read(&d->hdr, eventid, rmid, &am->prev_mon_val);
+		} else {
+			prmid = logical_rmid_to_physical_rmid(cpu, rmid);
+			/* Record any initial, non-zero count value. */
+			__rmid_read_phys(prmid, eventid, &am->prev_mon_val);
+		}
 	}
 }
 
@@ -278,7 +282,10 @@ int resctrl_arch_rmid_read(struct rdt_resource *r, struct rdt_domain_hdr *hdr,
 
 	switch (r->rid) {
 	case RDT_RESOURCE_L3:
-		return arch_l3_read_event(hdr, rmid, eventid, val, r);
+		if (erdt_enabled())
+			return erdt_mon_read(hdr, eventid, rmid, val);
+		else
+			return arch_l3_read_event(hdr, rmid, eventid, val, r);
 	case RDT_RESOURCE_PERF_PKG:
 		return intel_aet_read_event(hdr->id, rmid, arch_priv, val);
 	default:
