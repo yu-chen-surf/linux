@@ -15,12 +15,17 @@ enum erdt_mmio_type {
 	ERDT_MMIO_MAX
 };
 
+#define NR_MARC_CHOICE (ERDT_MMIO_MARC_MAX - ERDT_MMIO_MARC_OPT + 1)
+#define MARC_TYPE_IDX(type) (type - ERDT_MMIO_MARC_OPT)
+
 struct erdt_domain_info {
 	struct acpi_erdt_rmdd *rmdd;
 	struct acpi_erdt_cacd *cacd;
 	struct acpi_erdt_cmrc *cmrc;
 	struct acpi_erdt_mmrc *mmrc;
 	struct acpi_erdt_marc *marc;
+	/* staging buffer for MBA register blocks */
+	u64 *marc_buf[NR_MARC_CHOICE];
 	/* MMIO  address */
 	void __iomem *base[ERDT_MMIO_MAX];
 };

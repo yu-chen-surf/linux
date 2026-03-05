@@ -105,6 +105,88 @@ static u64 apply_correction_factor(u64 val, u32 factor)
 	return ((val * factor) >> FIXPOINT_LOW_BITS);
 }
 
+static void ctrl_update_type(struct erdt_domain_info *d,
+			     u32 ctrl_val, int type,
+			     int closid_idx, int region_offset_bits)
+{
+	int idx = MARC_TYPE_IDX(type);
+	u64 *cached_addr, cached_val;
+	void __iomem *vaddr;
+
+	if (!d->marc_buf[idx])
+		return;
+
+	/* the mmio address to write the MBA value into */
+	vaddr = d->base[type] + closid_idx * 8;
+	cached_addr = d->marc_buf[idx] +
+			closid_idx;
+	cached_val = *cached_addr;
+	/* first time to read */
+	if (!cached_val)
+		cached_val = readq(vaddr);
+
+	if (WARN_ON_ONCE(!cached_val))
+		return;
+
+	/* bandwidth target field has 9 bits */
+	ctrl_val &= 0x1ff;
+	cached_val = (cached_val & ~(0x1ffULL << region_offset_bits)) |
+			(u64)ctrl_val << region_offset_bits;
+	*cached_addr = cached_val;
+	writeq(cached_val, vaddr);
+}
+
+void erdt_ctrl_update(int domid, u32 ctrl_val, int closid, int region)
+{
+	int closid_idx, closid_per_block, region_offset_bits;
+	struct acpi_erdt_marc *marc = NULL;
+	struct erdt_domain_info *d;
+
+	d = xa_load(&erdt_domain_xa, domid);
+	if (!d)
+		return;
+
+	marc = d->marc;
+	if (!marc)
+		return;
+
+	/*
+	 * Write the same value to optimal/min/max memory bandwidth
+	 * for now.
+	 * MMIO_ADDRESS_for_CLOS# = MBA Optimal BW Register Block Base
+	 * Address + Floor(Region# / 4) x 512B + CLOS# x 8B
+	 *
+	 * The MMIO register for each CLOSID is 8-bytes and contains the
+	 * throttle values for all four regions (with the low two-bytes for
+	 * region0 and the high two-bytes for region3.
+	 *
+	 * The mba_reg_size is the size of MBA registers in units of
+	 * number of 4KB pages. A value of X in this field indicates
+	 * X*4KB space for each of the optimal, minimum, and maximum
+	 * register sets. Since each CLOSID takes up 8-bytes, the number
+	 * of CLOSID per block is marc->mba_reg_size * 4K / 8.
+	 */
+	closid_per_block = marc->mba_reg_size * 512;
+	/* the global closid index in the marc buffer, the unit is 8 bytes */
+	closid_idx = (region / 4) * closid_per_block + closid;
+
+	/*
+	 * region offset in bits within each closid, currently the max number
+	 * of regions is 4, it could be extended to more than 4 in the future.
+	 */
+	region_offset_bits = (region % 4) * 16;
+
+	ctrl_update_type(d, ctrl_val,
+			 ERDT_MMIO_MARC_MIN,
+			 closid_idx, region_offset_bits);
+	ctrl_update_type(d, ctrl_val,
+			 ERDT_MMIO_MARC_MAX,
+			 closid_idx, region_offset_bits);
+	ctrl_update_type(d, ctrl_val,
+			 ERDT_MMIO_MARC_OPT,
+			 closid_idx, region_offset_bits);
+}
+
 static int erdt_read_region_mbm(struct rdt_domain_hdr *hdr,
 				struct erdt_domain_info *d, int rmid,
 				int eventid, u64 *val)
@@ -197,6 +279,12 @@ int erdt_mon_read(struct rdt_domain_hdr *hdr, int ev_id, int rmid,
 		return erdt_read_region_mbm(hdr, d, rmid, ev_id, val);
 
 	return 0;
+}
+
+static void release_marc_buf(struct erdt_domain_info *domain_info)
+{
+	for (int i = 0; i < NR_MARC_CHOICE; i++)
+		kfree(domain_info->marc_buf[i]);
 }
 
 /*
@@ -295,6 +383,7 @@ static void erdt_iounmap_domain(struct erdt_domain_info *domain)
 static void cleanup_one_domain(struct erdt_domain_info *d)
 {
 	erdt_iounmap_domain(d);
+	release_marc_buf(d);
 	kfree(d);
 }
 
@@ -363,6 +452,15 @@ static bool marc_init(struct erdt_domain_info *d, struct acpi_subtbl_hdr_16 *sub
 							   marc->mba_reg_size, "MARC MAX base");
 	if (!d->base[ERDT_MMIO_MARC_MAX])
 		return false;
+
+	for (int i = 0; i < NR_MARC_CHOICE; i++) {
+		d->marc_buf[i] = kzalloc(marc->mba_reg_size * 4096, GFP_KERNEL);
+		if (!d->marc_buf[i]) {
+			pr_info("MARC temp buffer allocation failed.\n");
+
+			return false;
+		}
+	}
 
 	return true;
 }
