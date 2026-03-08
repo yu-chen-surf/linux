@@ -1176,6 +1176,46 @@ static int rdt_num_rmids_show(struct kernfs_open_file *of,
 	return 0;
 }
 
+static int rdt_min_show(struct kernfs_open_file *of,
+			struct seq_file *seq, void *v)
+{
+	struct resctrl_schema *s = rdt_kn_parent_priv(of->kn);
+
+	seq_printf(seq, "%u\n", s->min);
+
+	return 0;
+}
+
+static int rdt_max_show(struct kernfs_open_file *of,
+			struct seq_file *seq, void *v)
+{
+	struct resctrl_schema *s = rdt_kn_parent_priv(of->kn);
+
+	seq_printf(seq, "%u\n", s->max);
+
+	return 0;
+}
+
+static int rdt_scale_show(struct kernfs_open_file *of,
+			  struct seq_file *seq, void *v)
+{
+	struct resctrl_schema *s = rdt_kn_parent_priv(of->kn);
+
+	seq_printf(seq, "%u\n", s->scale);
+
+	return 0;
+}
+
+static int rdt_unit_show(struct kernfs_open_file *of,
+			 struct seq_file *seq, void *v)
+{
+	struct resctrl_schema *s = rdt_kn_parent_priv(of->kn);
+
+	seq_printf(seq, "%s\n", s->unit);
+
+	return 0;
+}
+
 static int rdt_mon_features_show(struct kernfs_open_file *of,
 				 struct seq_file *seq, void *v)
 {
@@ -1985,6 +2025,34 @@ static struct rftype res_common_files[] = {
 		.seq_show	= rdt_delay_linear_show,
 		.fflags		= RFTYPE_CTRL_INFO | RFTYPE_RES_MB,
 	},
+	{
+		.name		= "min",
+		.mode		= 0444,
+		.kf_ops		= &rdtgroup_kf_single_ops,
+		.seq_show	= rdt_min_show,
+		.fflags		= RFTYPE_CTRL_EXT,
+	},
+	{
+		.name		= "max",
+		.mode		= 0444,
+		.kf_ops		= &rdtgroup_kf_single_ops,
+		.seq_show	= rdt_max_show,
+		.fflags		= RFTYPE_CTRL_EXT,
+	},
+	{
+		.name		= "scale",
+		.mode		= 0444,
+		.kf_ops		= &rdtgroup_kf_single_ops,
+		.seq_show	= rdt_scale_show,
+		.fflags		= RFTYPE_CTRL_EXT,
+	},
+	{
+		.name		= "unit",
+		.mode		= 0444,
+		.kf_ops		= &rdtgroup_kf_single_ops,
+		.seq_show	= rdt_unit_show,
+		.fflags		= RFTYPE_CTRL_EXT,
+	},
 	/*
 	 * Platform specific which (if any) capabilities are provided by
 	 * thread_throttle_mode. Defer "fflags" initialization to platform
@@ -2362,14 +2430,18 @@ out:
 }
 
 static int rdtgroup_mkdir_info_resdir(void *priv, char *name,
-				      unsigned long fflags)
+				      unsigned long fflags,
+				      struct kernfs_node *parent)
 {
 	struct kernfs_node *kn_subdir;
 	struct rdt_resource *r;
 	int ret;
 
-	kn_subdir = kernfs_create_dir(kn_info, name,
-				      kn_info->mode, priv);
+	if (!parent)
+		parent = kn_info;
+
+	kn_subdir = kernfs_create_dir(parent, name,
+				      parent->mode, priv);
 	if (IS_ERR(kn_subdir))
 		return PTR_ERR(kn_subdir);
 
@@ -2423,6 +2495,7 @@ static unsigned long fflags_from_resource(struct rdt_resource *r)
 
 static int rdtgroup_create_info_dir(struct kernfs_node *parent_kn)
 {
+	struct kernfs_node *kn_extra;
 	struct resctrl_schema *s;
 	struct rdt_resource *r;
 	unsigned long fflags;
@@ -2442,7 +2515,7 @@ static int rdtgroup_create_info_dir(struct kernfs_node *parent_kn)
 	list_for_each_entry(s, &resctrl_schema_all, list) {
 		r = s->res;
 		fflags = fflags_from_resource(r) | RFTYPE_CTRL_INFO;
-		ret = rdtgroup_mkdir_info_resdir(s, s->name, fflags);
+		ret = rdtgroup_mkdir_info_resdir(s, s->name, fflags, NULL);
 		if (ret)
 			goto out_destroy;
 	}
@@ -2450,9 +2523,66 @@ static int rdtgroup_create_info_dir(struct kernfs_node *parent_kn)
 	for_each_mon_capable_rdt_resource(r) {
 		fflags = fflags_from_resource(r) | RFTYPE_MON_INFO;
 		sprintf(name, "%s_MON", r->name);
-		ret = rdtgroup_mkdir_info_resdir(r, name, fflags);
+		ret = rdtgroup_mkdir_info_resdir(r, name, fflags, NULL);
 		if (ret)
 			goto out_destroy;
+	}
+
+	kn_extra = kernfs_create_dir(kn_info, "extra", kn_info->mode, NULL);
+	if (IS_ERR(kn_extra)) {
+		ret = PTR_ERR(kn_extra);
+		goto out_destroy;
+	}
+
+	kernfs_activate(kn_extra);
+
+	for_each_capable_rdt_resource(r) {
+		struct kernfs_node *kn_r, *kn_s;
+
+		/*
+		 * Create directory for this resource if not present.
+		 * It is possible that multiple schema share the same
+		 * resource name.
+		 */
+		kn_r = kernfs_find_and_get(kn_extra, r->name);
+		if (!kn_r) {
+			kn_r = kernfs_create_dir(kn_extra, r->name, kn_extra->mode, NULL);
+			if (IS_ERR(kn_r)) {
+				ret = PTR_ERR(kn_r);
+				goto out_destroy;
+			}
+
+			ret = rdtgroup_kn_set_ugid(kn_r);
+			if (ret)
+				goto out_destroy;
+			kernfs_activate(kn_r);
+		}
+		kernfs_put(kn_r);
+
+		/* create directory for schema belonged to this resource */
+		kn_s = kernfs_find_and_get(kn_r, "resource_schemata");
+		if (!kn_s) {
+			kn_s = kernfs_create_dir(kn_r, "resource_schemata", kn_r->mode, NULL);
+			if (IS_ERR(kn_s)) {
+				ret = PTR_ERR(kn_s);
+				goto out_destroy;
+			}
+
+			ret = rdtgroup_kn_set_ugid(kn_s);
+			if (ret)
+				goto out_destroy;
+			kernfs_activate(kn_s);
+		}
+		kernfs_put(kn_s);
+
+		list_for_each_entry(s, &resctrl_schema_all, list) {
+			if (s->res != r)
+				continue;
+
+			ret = rdtgroup_mkdir_info_resdir(s, s->name, RFTYPE_CTRL_EXT, kn_s);
+			if (ret)
+				goto out_destroy;
+		}
 	}
 
 	ret = rdtgroup_kn_set_ugid(kn_info);
@@ -2713,6 +2843,14 @@ static int schemata_list_add(struct rdt_resource *r, enum resctrl_conf_type type
 	s->num_closid = resctrl_arch_get_num_closid(r);
 	if (resctrl_arch_get_cdp_enabled(r->rid))
 		s->num_closid /= 2;
+
+	if (region != -1) {
+		s->min = 1;
+		s->max = MAX_MBA_REGION_BW;
+		s->scale = 1;
+		s->resolution = 1;
+		s->unit = "raw";
+	}
 
 	s->conf_type = type;
 	switch (type) {

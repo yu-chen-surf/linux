@@ -245,6 +245,8 @@ struct rdtgroup {
 
 #define RFTYPE_BASE			BIT(1)
 
+#define RFTYPE_CTRL_EXT			BIT(2)
+
 #define RFTYPE_CTRL			BIT(4)
 
 #define RFTYPE_MON			BIT(5)

@@ -317,6 +317,7 @@ struct resctrl_mon {
  * @cache:		Cache allocation related data
  * @membw:		If the component has bandwidth controls, their properties.
  * @mon:		Monitoring related data.
+ * @extra:		Extra read-only information.
  * @ctrl_domains:	RCU list of all control domains for this resource
  * @mon_domains:	RCU list of all monitor domains for this resource
  * @name:		Name to use in "schemata" file.
@@ -358,6 +359,11 @@ struct rdt_resource *resctrl_arch_get_resource(enum resctrl_res_level l);
  * @num_closid:	The number of closid that can be used with this schema. When
  *		features like CDP are enabled, this will be lower than the
  *		hardware supports for the resource.
+ * @min:	The min value of this schema
+ * @max:	The max value of this schema
+ * @scale:	The scale factor of this schema
+ * @resolution:	The resolution of this schema
+ * @unit:	The unit displayed of this schema
  */
 struct resctrl_schema {
 	struct list_head		list;
@@ -366,6 +372,11 @@ struct resctrl_schema {
 	enum resctrl_conf_type		conf_type;
 	struct rdt_resource		*res;
 	u32				num_closid;
+	u32				min;
+	u32				max;
+	u32				scale;
+	u32				resolution;
+	char				*unit;
 };
 
 struct resctrl_cpu_defaults {
