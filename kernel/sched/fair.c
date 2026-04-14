@@ -10432,7 +10432,7 @@ static enum llc_mig can_migrate_llc_task(int src_cpu, int dst_cpu,
 	if (!mm)
 		return mig_unrestricted;
 
-	cpu = mm->sc_stat.cpu;
+	cpu = READ_ONCE(mm->sc_stat.cpu);
 	if (cpu < 0 || cpus_share_cache(src_cpu, dst_cpu))
 		return mig_unrestricted;
 
