@@ -10343,7 +10343,7 @@ alb_break_llc(struct lb_env *env)
 			return true;
 
 		cur = rcu_dereference_all(env->src_rq->curr);
-		if (cur)
+		if (cur && cur->sched_class == &fair_sched_class)
 			util = task_util(cur);
 
 		if (can_migrate_llc(env->src_cpu, env->dst_cpu,
