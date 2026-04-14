@@ -1410,6 +1410,7 @@ struct task_struct {
 #ifdef CONFIG_SCHED_CACHE
 	struct callback_head		cache_work;
 	int				preferred_llc;
+	bool				pref_llc_queued ;
 #endif
 
 	struct rseq_data		rseq;
