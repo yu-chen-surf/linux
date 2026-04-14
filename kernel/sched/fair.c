@@ -1597,6 +1597,7 @@ void account_mm_sched(struct rq *rq, struct task_struct *p, s64 delta_exec)
 	 * its preferred state.
 	 */
 	if (epoch - READ_ONCE(mm->sc_stat.epoch) > EPOCH_LLC_AFFINITY_TIMEOUT ||
+	    get_nr_threads(p) <= 1 ||
 	    exceed_llc_nr(mm, cpu_of(rq))) {
 		if (mm->sc_stat.cpu != -1)
 			mm->sc_stat.cpu = -1;
@@ -1730,6 +1731,13 @@ static void task_cache_work(struct callback_head *work)
 	if (!try_cmpxchg(&mm->sc_stat.next_scan, &next_scan,
 			 now + EPOCH_PERIOD))
 		return;
+
+	if (get_nr_threads(p) <= 1) {
+		if (mm->sc_stat.cpu != -1)
+			mm->sc_stat.cpu = -1;
+
+		return;
+	}
 
 	scoped_guard (cpus_read_lock) {
 		guard(rcu)();
@@ -10342,8 +10350,9 @@ static enum llc_mig can_migrate_llc_task(int src_cpu, int dst_cpu,
 	if (cpu < 0 || cpus_share_cache(src_cpu, dst_cpu))
 		return mig_unrestricted;
 
-	/* skip cache aware load balance for too many threads */
-	if (exceed_llc_nr(mm, dst_cpu)) {
+	/* skip cache aware load balance for single/too many threads */
+	if (exceed_llc_nr(mm, dst_cpu) ||
+	    get_nr_threads(p) <= 1) {
 		if (mm->sc_stat.cpu != -1)
 			mm->sc_stat.cpu = -1;
 		return mig_unrestricted;
