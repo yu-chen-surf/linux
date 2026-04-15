@@ -1384,6 +1384,27 @@ static int llc_id(int cpu)
 	return per_cpu(sd_llc_id, cpu);
 }
 
+static bool exceed_llc_capacity(struct mm_struct *mm, int cpu)
+{
+#ifdef CONFIG_NUMA_BALANCING
+
+	unsigned long llc, footprint;
+	struct sched_domain *sd;
+
+	sd = rcu_dereference_all(per_cpu(sd_llc, cpu));
+	if (!sd)
+		return true;
+
+	if (static_branch_likely(&sched_numa_balancing)) {
+		llc = sd->llc_bytes;
+		footprint = p->total_numa_faults;
+
+		return (llc < (footprint * PAGE_SIZE));
+	}
+#endif
+	return true;
+}
+
 static bool exceed_llc_nr(struct mm_struct *mm, int cpu)
 {
 	return !fits_capacity((mm->sc_stat.nr_running_avg * cpu_smt_num_threads),
@@ -1598,7 +1619,8 @@ void account_mm_sched(struct rq *rq, struct task_struct *p, s64 delta_exec)
 	 */
 	if (epoch - READ_ONCE(mm->sc_stat.epoch) > EPOCH_LLC_AFFINITY_TIMEOUT ||
 	    get_nr_threads(p) <= 1 ||
-	    exceed_llc_nr(mm, cpu_of(rq))) {
+	    exceed_llc_nr(mm, cpu_of(rq)) ||
+	    exceed_llc_capacity(mm, cpu_of(rq))) {
 		if (mm->sc_stat.cpu != -1)
 			mm->sc_stat.cpu = -1;
 	}
@@ -1705,9 +1727,9 @@ static inline void update_avg_scale(u64 *avg, u64 sample)
 
 static void task_cache_work(struct callback_head *work)
 {
+	int cpu, m_a_cpu = -1, nr_running = 0, curr_cpu;
 	unsigned long next_scan, now = jiffies;
 	struct task_struct *p = current, *cur;
-	int cpu, m_a_cpu = -1, nr_running = 0;
 	unsigned long curr_m_a_occ = 0;
 	struct mm_struct *mm = p->mm;
 	unsigned long m_a_occ = 0;
@@ -1732,7 +1754,9 @@ static void task_cache_work(struct callback_head *work)
 			 now + EPOCH_PERIOD))
 		return;
 
-	if (get_nr_threads(p) <= 1) {
+	curr_cpu = task_cpu(p);
+	if (get_nr_threads(p) <= 1 ||
+	    exceed_llc_capacity(mm, curr_cpu)) {
 		if (mm->sc_stat.cpu != -1)
 			mm->sc_stat.cpu = -1;
 
@@ -10350,9 +10374,13 @@ static enum llc_mig can_migrate_llc_task(int src_cpu, int dst_cpu,
 	if (cpu < 0 || cpus_share_cache(src_cpu, dst_cpu))
 		return mig_unrestricted;
 
-	/* skip cache aware load balance for single/too many threads */
+	/*
+	 * Skip cache aware load balance for single/too many threads,
+	 * or with large memory RSS.
+	 */
 	if (exceed_llc_nr(mm, dst_cpu) ||
-	    get_nr_threads(p) <= 1) {
+	    get_nr_threads(p) <= 1 ||
+	    exceed_llc_capacity(mm, dst_cpu)) {
 		if (mm->sc_stat.cpu != -1)
 			mm->sc_stat.cpu = -1;
 		return mig_unrestricted;
