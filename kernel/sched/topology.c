@@ -2974,9 +2974,12 @@ build_sched_domains(const struct cpumask *cpu_map, struct sched_domain_attr *att
 			 * NUMA imbalance stats for the hierarchy.
 			 */
 			if (sd->parent) {
-			    if (IS_ENABLED(CONFIG_NUMA))
-				    adjust_numa_imbalance(sd);
-			    has_multi_llcs = true;
+				if (IS_ENABLED(CONFIG_NUMA))
+					adjust_numa_imbalance(sd);
+
+				if (!cpumask_equal(sched_domain_span(sd),
+						   sched_domain_span(sd->parent)))
+					has_multi_llcs = true;
 			}
 		}
 	}
