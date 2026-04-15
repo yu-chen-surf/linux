@@ -820,6 +820,8 @@ enum s_alloc {
 	sa_none,
 };
 
+static struct sched_domain_topology_level *get_sched_topology(void);
+
 #ifdef CONFIG_SCHED_CACHE
 /* hardware support for cache aware scheduling */
 DEFINE_STATIC_KEY_FALSE(sched_cache_present);
@@ -830,6 +832,46 @@ DEFINE_STATIC_KEY_FALSE(sched_cache_present);
 DEFINE_STATIC_KEY_FALSE(sched_cache_active);
 /* user wants cache aware scheduling [0 or 1] */
 int sysctl_sched_cache_user = 1;
+
+/*
+ * Get the LLC size that a specific CPU can use.
+ * The assumption is that a CPU within a partition
+ * can only use a proportion of the LLC according
+ * to its CPU weight.
+ */
+static unsigned int get_effect_llc_bytes(int cpu,
+					 struct sched_domain *sd)
+{
+	struct sched_domain_topology_level *tl = get_sched_topology();
+	unsigned int tl_weight;
+	struct cacheinfo *ci;
+
+	/* find the topmost SD_SHARE_LLC domain */
+	while (sd->parent && (sd->parent->flags & SD_SHARE_LLC)) {
+		sd = sd->parent;
+		tl++;
+	}
+
+	if (!(sd->flags & SD_SHARE_LLC))
+		return 0;
+
+	ci = get_cpu_cacheinfo_level(cpu, 3);
+	if (!ci) {
+		/*
+		 * On system without L3 but with shared L2,
+		 *  L2 becomes the LLC.
+		 */
+		ci = get_cpu_cacheinfo_level(cpu, 2);
+		if (!ci)
+			return 0;
+	}
+
+	tl_weight = cpumask_weight(tl->mask(tl, cpu));
+	if (!tl_weight)
+		return 0;
+
+	return ci->size * sd->span_weight / tl_weight;
+}
 
 static bool alloc_sd_llc(const struct cpumask *cpu_map,
 			 struct s_data *d)
@@ -850,6 +892,7 @@ static bool alloc_sd_llc(const struct cpumask *cpu_map,
 
 		sd->llc_max = max_lid + 1;
 		sd->llc_counts = p;
+		sd->llc_bytes = get_effect_llc_bytes(i, sd);
 	}
 
 	return true;
@@ -860,6 +903,7 @@ err:
 			kfree(sd->llc_counts);
 			sd->llc_counts = NULL;
 			sd->llc_max = 0;
+			sd->llc_bytes = 0;
 		}
 	}
 
@@ -1944,6 +1988,11 @@ void __init set_sched_topology(struct sched_domain_topology_level *tl)
 
 	sched_domain_topology = tl;
 	sched_domain_topology_saved = NULL;
+}
+
+static struct sched_domain_topology_level *get_sched_topology(void)
+{
+	return sched_domain_topology;
 }
 
 #ifdef CONFIG_NUMA

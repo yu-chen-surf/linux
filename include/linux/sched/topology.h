@@ -106,6 +106,7 @@ struct sched_domain {
 #ifdef CONFIG_SCHED_CACHE
 	unsigned int llc_max;
 	unsigned int *llc_counts __counted_by_ptr(llc_max);
+	unsigned int llc_bytes;
 #endif
 
 #ifdef CONFIG_SCHEDSTATS
