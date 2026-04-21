@@ -1619,13 +1619,14 @@ static unsigned long fraction_mm_sched(struct rq *rq,
 
 static int get_pref_llc(struct task_struct *p, struct mm_struct *mm)
 {
-	int mm_sched_llc = -1;
+	int mm_sched_llc = -1, mm_sched_cpu;
 
 	if (!mm)
 		return -1;
 
-	if (mm->sc_stat.cpu != -1) {
-		mm_sched_llc = llc_id(mm->sc_stat.cpu);
+	mm_sched_cpu = mm->sc_stat.cpu;
+	if (mm_sched_cpu != -1) {
+		mm_sched_llc = llc_id(mm_sched_cpu);
 
 #ifdef CONFIG_NUMA_BALANCING
 		/*
@@ -1640,7 +1641,7 @@ static int get_pref_llc(struct task_struct *p, struct mm_struct *mm)
 		 */
 		if (static_branch_likely(&sched_numa_balancing) &&
 		    p->numa_preferred_nid >= 0 &&
-		    cpu_to_node(mm->sc_stat.cpu) != p->numa_preferred_nid)
+		    cpu_to_node(mm_sched_cpu) != p->numa_preferred_nid)
 			mm_sched_llc = -1;
 #endif
 	}
