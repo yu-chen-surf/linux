@@ -1384,6 +1384,30 @@ static int llc_id(int cpu)
 	return per_cpu(sd_llc_id, cpu);
 }
 
+static bool exceed_llc_capacity(struct mm_struct *mm, int cpu)
+{
+#ifdef CONFIG_NUMA_BALANCING
+	unsigned long llc, footprint;
+	struct sched_domain *sd;
+
+	sd = rcu_dereference_sched_domain(cpu_rq(cpu)->sd);
+	if (!sd)
+		return true;
+
+	if (static_branch_likely(&sched_numa_balancing)) {
+		/*
+		 * TBD: RDT exclusive LLC ways reserved should be
+		 * excluded.
+		 */
+		llc = sd->llc_bytes;
+		footprint = mm->sc_stat.footprint;
+
+		return (llc < (footprint * PAGE_SIZE));
+	}
+#endif
+	return false;
+}
+
 static bool invalid_llc_nr(struct mm_struct *mm, struct task_struct *p,
 			   int cpu)
 {
@@ -1585,7 +1609,8 @@ void account_mm_sched(struct rq *rq, struct task_struct *p, s64 delta_exec)
 	 * its preferred state.
 	 */
 	if (epoch - READ_ONCE(mm->sc_stat.epoch) > EPOCH_LLC_AFFINITY_TIMEOUT ||
-	    invalid_llc_nr(mm, p, cpu_of(rq))) {
+	    invalid_llc_nr(mm, p, cpu_of(rq)) ||
+	    exceed_llc_capacity(mm, cpu_of(rq))) {
 		if (mm->sc_stat.cpu != -1)
 			mm->sc_stat.cpu = -1;
 	}
@@ -1718,8 +1743,15 @@ static void task_cache_work(struct callback_head *work)
 	if (!zalloc_cpumask_var(&cpus, GFP_KERNEL))
 		return;
 
+	/*
+	 * Need to protect rcu dereference in exceed_llc_capacity()
+	 * and the following loop.
+	 */
+	guard(rcu)();
+
 	curr_cpu = task_cpu(p);
-	if (invalid_llc_nr(mm, p, curr_cpu)) {
+	if (invalid_llc_nr(mm, p, curr_cpu) ||
+	    exceed_llc_capacity(mm, curr_cpu)) {
 		if (mm->sc_stat.cpu != -1)
 			mm->sc_stat.cpu = -1;
 
@@ -1727,7 +1759,6 @@ static void task_cache_work(struct callback_head *work)
 	}
 
 	scoped_guard (cpus_read_lock) {
-		guard(rcu)();
 
 		get_scan_cpumasks(cpus, p);
 
@@ -3589,6 +3620,14 @@ static void task_numa_placement(struct task_struct *p)
 				ng->total_faults += diff;
 				group_faults += ng->faults[mem_idx];
 			}
+#ifdef CONFIG_SCHED_CACHE
+			/*
+			 * Racy with concurrent updates from other threads
+			 * sharing this mm. Acceptable since footprint is a
+			 * heuristic and occasional lost updates are tolerable.
+			 */
+			p->mm->sc_stat.footprint += diff;
+#endif
 		}
 
 		if (!ng) {
@@ -10338,7 +10377,8 @@ static enum llc_mig can_migrate_llc_task(int src_cpu, int dst_cpu,
 		return mig_unrestricted;
 
 	/* skip cache aware load balance for too many threads */
-	if (invalid_llc_nr(mm, p, dst_cpu)) {
+	if (invalid_llc_nr(mm, p, dst_cpu) ||
+	    exceed_llc_capacity(mm, dst_cpu)) {
 		if (mm->sc_stat.cpu != -1)
 			mm->sc_stat.cpu = -1;
 		return mig_unrestricted;
