@@ -10667,7 +10667,10 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
 	 * 4) too many balance attempts have failed.
 	 */
 	if (env->flags & LBF_ACTIVE_LB)
-		return 1;
+#ifdef CONFIG_SCHED_CACHE
+		if (p->preferred_llc != -1)
+#endif
+			return 1;
 
 	degrades = migrate_degrades_locality(p, env);
 	if (!degrades) {
