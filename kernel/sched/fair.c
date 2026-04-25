@@ -13323,9 +13323,12 @@ more_balance:
 		 * See can_migrate_task().
 		 */
 		if (idle != CPU_NEWLY_IDLE &&
-		    env.migration_type != migrate_misfit &&
-		    !(env.flags & LBF_LLC_PINNED))
-			sd->nr_balance_failed++;
+		    env.migration_type != migrate_misfit) {
+			if (!(env.flags & LBF_LLC_PINNED))
+				sd->nr_balance_failed++;
+			else
+				env.flags &= ~LBF_LLC_PINNED;
+		}
 
 		if (need_active_balance(&env)) {
 			unsigned long flags;
