@@ -17,6 +17,7 @@
 #include <linux/init.h>
 #include <linux/of.h>
 #include <linux/sched.h>
+#include <linux/sched/topology.h>
 #include <linux/slab.h>
 #include <linux/smp.h>
 #include <linux/sysfs.h>
@@ -1018,6 +1019,7 @@ static int cacheinfo_cpu_online(unsigned int cpu)
 		goto err;
 	if (cpu_map_shared_cache(true, cpu, &cpu_map))
 		update_per_cpu_data_slice_size(true, cpu, cpu_map);
+	sched_update_llc_bytes(cpu);
 	return 0;
 err:
 	free_cache_attributes(cpu);
