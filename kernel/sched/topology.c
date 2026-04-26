@@ -776,9 +776,11 @@ cpu_attach_domain(struct sched_domain *sd, struct root_domain *rd, int cpu)
 			/* move buffer to parent as child is being destroyed */
 			sd->llc_counts = tmp->llc_counts;
 			sd->llc_max = tmp->llc_max;
+			sd->llc_bytes = tmp->llc_bytes;
 			/* make sure destroy_sched_domain() does not free it */
 			tmp->llc_counts = NULL;
 			tmp->llc_max = 0;
+			tmp->llc_bytes = 0;
 #endif
 			/*
 			 * sched groups hold the flags of the child sched
@@ -831,6 +833,37 @@ DEFINE_STATIC_KEY_FALSE(sched_cache_active);
 /* user wants cache aware scheduling [0 or 1] */
 int sysctl_sched_cache_user = 1;
 
+/*
+ * Get the effective LLC size in bytes that @cpu's bottom sched_domain
+ * can use. A CPU within a cpuset partition can only use a proportion
+ * of the physical LLC, scaled by the ratio of the partition's span
+ * weight to the hardware LLC sharing weight
+ *
+ * Returns 0 if cacheinfo is not yet populated. This happens during
+ * early boot when build_sched_domains() runs before the generic
+ * cacheinfo framework has been initialized (cacheinfo_cpu_online()
+ * is a device_initcall cpuhp callback). In that case,
+ * cacheinfo_cpu_online() will later call sched_update_llc_bytes()
+ * to fill in the bottom domain's llc_bytes once the cache attributes
+ * are available.
+ */
+static unsigned long get_effective_llc_bytes(int cpu,
+					     struct sched_domain *sd)
+{
+	struct cacheinfo *ci;
+	unsigned int hw_weight;
+
+	ci = get_cpu_cacheinfo_llc(cpu);
+	if (!ci)
+		return 0;
+
+	hw_weight = cpumask_weight(&ci->shared_cpu_map);
+	if (!hw_weight)
+		return 0;
+
+	return (unsigned long)ci->size * sd->span_weight / hw_weight;
+}
+
 static bool alloc_sd_llc(const struct cpumask *cpu_map,
 			 struct s_data *d)
 {
@@ -850,6 +883,7 @@ static bool alloc_sd_llc(const struct cpumask *cpu_map,
 
 		sd->llc_max = max_lid + 1;
 		sd->llc_counts = p;
+		sd->llc_bytes = get_effective_llc_bytes(i, sd);
 	}
 
 	return true;
@@ -860,6 +894,7 @@ err:
 			kfree(sd->llc_counts);
 			sd->llc_counts = NULL;
 			sd->llc_max = 0;
+			sd->llc_bytes = 0;
 		}
 	}
 
@@ -918,6 +953,41 @@ static void sched_cache_active_set_locked(void)
 void sched_cache_active_set_unlocked(void)
 {
 	return sched_cache_active_set(false);
+}
+
+/*
+ * Update the bottom sched_domain's llc_bytes for @cpu once
+ * cacheinfo is populated. Called from cacheinfo_cpu_online()
+ * with cpus_read_lock held.
+ *
+ * Note: PowerPC does not use the generic cacheinfo
+ * framework -- it has its own cacheinfo with a
+ * separate struct cache hierarchy and never populates the per-CPU
+ * struct cpu_cacheinfo array that get_cpu_cacheinfo_llc() reads.
+ * As a result, get_effective_llc_bytes() always returns 0 on
+ * PowerPC.
+ *
+ * If a PowerPC user wants to leverage cache-aware scheduling, they
+ * can either:
+ *   - force cache-aware scheduling unconditionally by setting the
+ *     aggregation aggressiveness knob (aggr_tolerance) to
+ *     100, which bypasses the llc_bytes-based gating; or
+ *   - extend the PowerPC cacheinfo code to also populate the generic
+ *     struct cpu_cacheinfo (in particular ci->size and
+ *     ci->shared_cpu_map for the L3/LLC level) so that
+ *     get_effective_llc_bytes() can compute a meaningful value.
+ */
+void sched_update_llc_bytes(unsigned int cpu)
+{
+	struct sched_domain *sd;
+
+	sched_domains_mutex_lock();
+
+	sd = rcu_dereference_sched_domain(cpu_rq(cpu)->sd);
+	if (sd && !sd->llc_bytes)
+		sd->llc_bytes = get_effective_llc_bytes(cpu, sd);
+
+	sched_domains_mutex_unlock();
 }
 #else
 static bool alloc_sd_llc(const struct cpumask *cpu_map,
