@@ -1688,7 +1688,7 @@ void account_mm_sched(struct rq *rq, struct task_struct *p, s64 delta_exec)
 	 * If this process hasn't hit task_cache_work() for a while invalidate
 	 * its preferred state.
 	 */
-	if (epoch - READ_ONCE(mm->sc_stat.epoch) > llc_epoch_affinity_timeout ||
+	if ((long)(epoch - READ_ONCE(mm->sc_stat.epoch)) > (long)llc_epoch_affinity_timeout ||
 	    invalid_llc_nr(mm, p, cpu_of(rq)) ||
 	    exceed_llc_capacity(mm, cpu_of(rq))) {
 		if (READ_ONCE(mm->sc_stat.cpu) != -1)
