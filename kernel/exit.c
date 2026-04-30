@@ -554,6 +554,21 @@ static void exit_mm(void)
 	exit_mm_release(current, mm);
 	if (!mm)
 		return;
+
+#if defined(CONFIG_SCHED_CACHE) && defined(CONFIG_NUMA_BALANCING)
+	if (current->total_numa_faults) {
+		/*
+		 * No lock protection due to performance considerations.
+		 * Make sure mm->sc_stat.footprint does not become
+		 * negative.
+		 */
+		unsigned long fp = READ_ONCE(mm->sc_stat.footprint);
+		unsigned long sub = min(fp, current->total_numa_faults);
+
+		WRITE_ONCE(mm->sc_stat.footprint, fp - sub);
+    }
+#endif
+
 	mmap_read_lock(mm);
 	mmgrab_lazy_tlb(mm);
 	BUG_ON(mm != current->active_mm);
