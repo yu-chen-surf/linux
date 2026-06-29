@@ -549,6 +549,19 @@ static void l3_mon_domain_setup(int cpu, int id, struct rdt_resource *r, struct 
 	d->ci_id = ci->id;
 	cpumask_set_cpu(cpu, &d->hdr.cpu_mask);
 
+	/*
+	 * Verify whether the CPU domain information matches the ACPI data.
+	 * Skip adding the newly created domain to the list if there is a mismatch.
+	 * ACPI information should be assigned to the domain prior to its insertion
+	 * into the list, in case others might iterate the list in parallel.
+	 */
+	if (erdt_l3_mon_domain_setup(cpu, &d->hdr)) {
+		pr_warn("CPU%d has inconsistent domain information, do not add this new domain\n", cpu);
+		cpumask_clear_cpu(cpu, &d->hdr.cpu_mask);
+		l3_mon_domain_free(hw_dom);
+		return;
+	}
+
 	arch_mon_domain_online(r, d);
 
 	if (l3_mon_domain_mbm_alloc(r->mon.num_rmid, hw_dom)) {
@@ -591,6 +604,10 @@ static void domain_add_cpu_mon(int cpu, struct rdt_resource *r)
 			resctrl_arch_mbm_cntr_assign_set_one(r);
 		if (!hdr)
 			l3_mon_domain_setup(cpu, id, r, add_pos);
+		else if (erdt_l3_mon_domain_setup(cpu, hdr)) {
+			pr_warn("CPU%d has inconsistent domain information, remove it from the domain\n", cpu);
+			cpumask_clear_cpu(cpu, &hdr->cpu_mask);
+		}
 		break;
 	case RDT_RESOURCE_PERF_PKG:
 		if (!hdr)

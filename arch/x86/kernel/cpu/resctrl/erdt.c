@@ -212,6 +212,55 @@ cleanup:
 	return false;
 }
 
+/*
+ * Associate ERDT table information with this domain.
+ */
+int erdt_l3_mon_domain_setup(int cpu, struct rdt_domain_hdr *hdr)
+{
+	struct rdt_hw_l3_mon_domain *hw_dom;
+	struct erdt_domain_info *d;
+	struct list_head *pos;
+
+	if (!__erdt_enabled)
+		return 0;
+
+	/*
+	 * Find the erdt_domain_info that contains this CPU,
+	 * compare erdt_domain_info's cpumask with the cpumask
+	 * exposed by hw_dom (derived from CPUID leaf 4).
+	 * If yes, assign the erdt_domain_info in the hw_dom,
+	 * otherwise this CPU should be isolated from resctrl.
+	 * For example, the hw_dom reports CPU{0,1} are in
+	 * l3 domain0, CPU{2,3} belongs to domain1. Meanwhile
+	 * erdt_domain_info reports that CPU{0,2} are in domain0,
+	 * CPU{1,3} are in domain1. So when it comes to CPU1,
+	 * a mismatch is detected, we should remove CPU1 from
+	 * resctrl.
+	 */
+	list_for_each(pos, &domain_info_list) {
+		d = container_of(pos, struct erdt_domain_info, list);
+
+		if (cpumask_test_cpu(cpu, d->cpu_mask)) {
+			if (!cpumask_subset(&hdr->cpu_mask, d->cpu_mask)) {
+				pr_warn(FW_BUG "Mismatch detected, CPU%d in L3 domain(%*pbl) and CACD domain(%*pbl)\n",
+					cpu, cpumask_pr_args(&hdr->cpu_mask), cpumask_pr_args(d->cpu_mask));
+
+				return -EIO;
+			}
+
+			hw_dom = resctrl_to_arch_mon_dom(container_of(hdr, struct rdt_l3_mon_domain, hdr));
+			/* No mismatch, assign the ERDT information to hw_dom */
+			if (!hw_dom->d_info)
+				hw_dom->d_info = d;
+
+			return 0;
+		}
+	}
+
+	pr_warn(FW_BUG "Cannot find CACD domain for CPU%d\n", cpu);
+	return -ENOENT;
+}
+
 void erdt_exit(void)
 {
 	struct erdt_domain_info *d;
