@@ -36,6 +36,7 @@ enum erdt_mmio_type {
 
 struct erdt_domain_info {
 	void __iomem		*base[ERDT_MMIO_NUM_TYPES];
+	struct acpi_erdt_cmrc	*cmrc;
 	cpumask_var_t		cpu_mask;
 	int			max_rmid;
 	struct list_head	list;
