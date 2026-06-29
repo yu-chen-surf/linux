@@ -36,6 +36,9 @@ static u32 valid_subtbl_mask;
 
 bool erdt_support_features(int flag)
 {
+	if (flag == X86_FEATURE_CQM_OCCUP_LLC)
+		return valid_subtbl_mask & BIT(ACPI_ERDT_TYPE_CMRC);
+
 	return false;
 }
 
@@ -57,8 +60,68 @@ int erdt_get_max_rmid(int cpu)
 	return -1;
 }
 
+static void __iomem *cmrc_index_function_1(struct erdt_domain_info *d,
+					   struct acpi_erdt_cmrc *cmrc, int rmid)
+{
+	u16 clump_size, stride_size;
+	void __iomem *vaddr;
+
+	clump_size = cmrc->clump_size;
+	stride_size = cmrc->clump_stride;
+
+	/*
+	 * MMIO_ADDRESS_for_RMID# = CMRC Base +
+	 *   (RMID / ClumpSize) * Stride +
+	 *   (RMID % ClumpSize) * 8
+	 */
+	vaddr = d->base[ERDT_MMIO_CMRC_BASE] +
+		(rmid / clump_size) * stride_size +
+		(rmid % clump_size) * 8;
+
+	return vaddr;
+}
+
+static int erdt_read_l3_occupancy(struct erdt_domain_info *d, int rmid, u64 *val)
+{
+	struct acpi_erdt_cmrc *cmrc;
+	void __iomem *vaddr;
+	u64 l3_cmt_count;
+	u32 offset;
+
+	cmrc = d->cmrc;
+	if (!cmrc)
+		return -EIO;
+
+	offset = (rmid / cmrc->clump_size) * cmrc->clump_stride +
+		 (rmid % cmrc->clump_size) * 8;
+	/* Overflow of cmt_reg_size * SZ_4K already validated in erdt_ioremap(). */
+	if (offset + sizeof(u64) > (u32)cmrc->cmt_reg_size * SZ_4K)
+		return -EINVAL;
+
+	vaddr = cmrc_index_function_1(d, cmrc, rmid);
+
+	l3_cmt_count = readq(vaddr);
+	if (l3_cmt_count & UNAVAILABLE_COUNTER)
+		return -EINVAL;
+
+	*val = l3_cmt_count * cmrc->up_scale;
+
+	return 0;
+}
+
 int erdt_mon_read(struct rdt_domain_hdr *hdr, int ev_id, int rmid, u64 *val)
 {
+	struct rdt_hw_l3_mon_domain *hw_dom;
+	struct erdt_domain_info *d;
+
+	hw_dom = resctrl_to_arch_mon_dom(container_of(hdr, struct rdt_l3_mon_domain, hdr));
+	d = hw_dom->d_info;
+	if (!d)
+		return -EIO;
+
+	if (ev_id == QOS_L3_OCCUP_EVENT_ID)
+		return erdt_read_l3_occupancy(d, rmid, val);
+
 	return -EIO;
 }
 
