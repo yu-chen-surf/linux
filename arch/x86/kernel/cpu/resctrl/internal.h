@@ -22,6 +22,26 @@
 #define RMID_VAL_UNAVAIL		BIT_ULL(62)
 
 /*
+ * Index into erdt_domain_info::base[] for each MMIO region.
+ * @ERDT_MMIO_RMDD_CREG: RMDD control register base address
+ * @ERDT_MMIO_CMRC_BASE: CMRC monitoring register base address
+ */
+enum erdt_mmio_type {
+	ERDT_MMIO_RMDD_CREG,
+	ERDT_MMIO_CMRC_BASE,
+	ERDT_MMIO_LAST = ERDT_MMIO_CMRC_BASE
+};
+
+#define ERDT_MMIO_NUM_TYPES	(ERDT_MMIO_LAST + 1)
+
+struct erdt_domain_info {
+	void __iomem		*base[ERDT_MMIO_NUM_TYPES];
+	cpumask_var_t		cpu_mask;
+	int			max_rmid;
+	struct list_head	list;
+};
+
+/*
  * With the above fields in use 62 bits remain in MSR_IA32_QM_CTR for
  * data to be returned. The counter width is discovered from the hardware
  * as an offset from MBM_CNTR_WIDTH_BASE.
@@ -252,5 +272,9 @@ static inline void intel_aet_mon_domain_setup(int cpu, int id, struct rdt_resour
 					      struct list_head *add_pos) { }
 static inline bool intel_handle_aet_option(bool force_off, char *tok) { return false; }
 #endif
+
+int erdt_get_max_rmid(int cpu);
+int erdt_init(void);
+void erdt_exit(void);
 
 #endif /* _ASM_X86_RESCTRL_INTERNAL_H */
