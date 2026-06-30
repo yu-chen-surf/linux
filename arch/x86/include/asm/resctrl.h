@@ -49,6 +49,8 @@ DECLARE_STATIC_KEY_FALSE(rdt_enable_key);
 DECLARE_STATIC_KEY_FALSE(rdt_alloc_enable_key);
 DECLARE_STATIC_KEY_FALSE(rdt_mon_enable_key);
 
+bool erdt_cpu_has(int flag);
+
 static inline bool resctrl_arch_alloc_capable(void)
 {
 	return rdt_alloc_capable;
@@ -130,6 +132,10 @@ static inline void __resctrl_sched_in(struct task_struct *tsk)
 static inline unsigned int resctrl_arch_round_mon_val(unsigned int val)
 {
 	unsigned int scale = boot_cpu_data.x86_cache_occ_scale;
+
+	/* ERDT itself factors and rounds the data within erdt.c */
+	if (erdt_cpu_has(X86_FEATURE_CQM_OCCUP_LLC))
+		return val;
 
 	/* h/w works in units of "boot_cpu_data.x86_cache_occ_scale" */
 	val /= scale;

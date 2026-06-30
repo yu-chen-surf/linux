@@ -279,6 +279,10 @@ int resctrl_arch_rmid_read(struct rdt_resource *r, struct rdt_domain_hdr *hdr,
 
 	switch (r->rid) {
 	case RDT_RESOURCE_L3:
+		if (eventid == QOS_L3_OCCUP_EVENT_ID &&
+		    erdt_cpu_has(X86_FEATURE_CQM_OCCUP_LLC))
+			return erdt_mon_read(hdr, eventid, rmid, val);
+
 		return arch_l3_read_event(hdr, rmid, eventid, val, r);
 	case RDT_RESOURCE_PERF_PKG:
 		return intel_aet_read_event(hdr->id, rmid, arch_priv, val);
@@ -423,6 +427,11 @@ int __init rdt_get_l3_mon_config(struct rdt_resource *r)
 {
 	unsigned int mbm_offset = boot_cpu_data.x86_cache_mbm_width_offset;
 	struct rdt_hw_resource *hw_res = resctrl_to_arch_res(r);
+	/*
+	 * Currently assume all CPU domains share the same maximum RMID
+	 * value from the RMDD table, use CPU0 domain's value.
+	 */
+	int erdt_max_rmid = erdt_get_max_rmid(0);
 	unsigned int threshold;
 	u32 eax, ebx, ecx, edx;
 
@@ -430,7 +439,8 @@ int __init rdt_get_l3_mon_config(struct rdt_resource *r)
 
 	resctrl_rmid_realloc_limit = boot_cpu_data.x86_cache_size * 1024;
 	hw_res->mon_scale = boot_cpu_data.x86_cache_occ_scale / snc_nodes_per_l3_cache;
-	r->mon.num_rmid = (boot_cpu_data.x86_cache_max_rmid + 1) / snc_nodes_per_l3_cache;
+	r->mon.num_rmid = (erdt_max_rmid > 0) ? erdt_max_rmid + 1 :
+			   (boot_cpu_data.x86_cache_max_rmid + 1) / snc_nodes_per_l3_cache;
 	hw_res->mbm_width = MBM_CNTR_WIDTH_BASE;
 
 	if (mbm_offset > 0 && mbm_offset <= MBM_CNTR_WIDTH_OFFSET_MAX)
@@ -477,7 +487,18 @@ int __init rdt_get_l3_mon_config(struct rdt_resource *r)
 		hw_res->mbm_cntr_assign_enabled = true;
 	}
 
-	r->mon_capable = true;
+	/*
+	 * If the platform has ERDT but the SNC is enabled,
+	 * this monitor should not be enabled.
+	 */
+	if (erdt_cpu_has(X86_FEATURE_CQM_OCCUP_LLC) &&
+	    snc_nodes_per_l3_cache > 1) {
+		WARN_ONCE(1, "ERDT is enabled but SNC%d is enabled, monitors for resource[%s] should be disabled\n",
+			  snc_nodes_per_l3_cache, r->name);
+		resctrl_disable_mon_event(QOS_L3_OCCUP_EVENT_ID);
+	} else {
+		r->mon_capable = true;
+	}
 
 	return 0;
 }

@@ -895,6 +895,29 @@ bool rdt_cpu_has(int flag)
 	return ret;
 }
 
+bool erdt_cpu_has(int flag)
+{
+	struct rdt_options *o;
+	bool ret;
+
+	ret = erdt_support_features(flag);
+
+	if (!ret)
+		return ret;
+
+	for (o = rdt_options; o < &rdt_options[NUM_RDT_OPTIONS]; o++) {
+		if (flag == o->flag) {
+			if (o->force_off)
+				ret = false;
+			if (o->force_on)
+				ret = true;
+			break;
+		}
+	}
+
+	return ret;
+}
+
 bool resctrl_arch_is_evt_configurable(enum resctrl_event_id evt)
 {
 	if (!rdt_cpu_has(X86_FEATURE_BMEC))
@@ -982,7 +1005,10 @@ static __init bool get_rdt_mon_resources(void)
 	struct rdt_resource *r = &rdt_resources_all[RDT_RESOURCE_L3].r_resctrl;
 	bool ret = false;
 
-	if (rdt_cpu_has(X86_FEATURE_CQM_OCCUP_LLC)) {
+	if (erdt_cpu_has(X86_FEATURE_CQM_OCCUP_LLC)) {
+		resctrl_enable_mon_event(QOS_L3_OCCUP_EVENT_ID, true, 0, NULL);
+		ret = true;
+	} else if (rdt_cpu_has(X86_FEATURE_CQM_OCCUP_LLC)) {
 		resctrl_enable_mon_event(QOS_L3_OCCUP_EVENT_ID, false, 0, NULL);
 		ret = true;
 	}
@@ -1000,7 +1026,10 @@ static __init bool get_rdt_mon_resources(void)
 	if (!ret)
 		return false;
 
-	return !rdt_get_l3_mon_config(r);
+	if (rdt_get_l3_mon_config(r))
+		return false;
+
+	return r->mon_capable;
 }
 
 static __init void __check_quirks_intel(void)

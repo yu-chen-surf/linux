@@ -278,8 +278,11 @@ static inline void intel_aet_mon_domain_setup(int cpu, int id, struct rdt_resour
 static inline bool intel_handle_aet_option(bool force_off, char *tok) { return false; }
 #endif
 
+bool erdt_support_features(int flag);
+bool erdt_cpu_has(int flag);
 int erdt_get_max_rmid(int cpu);
 int erdt_init(void);
 void erdt_exit(void);
+int erdt_mon_read(struct rdt_domain_hdr *hdr, int ev_id, int rmid, u64 *val);
 
 #endif /* _ASM_X86_RESCTRL_INTERNAL_H */

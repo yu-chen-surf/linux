@@ -18,6 +18,7 @@
 #include <linux/xarray.h>
 
 #include <asm/apic.h>
+#include <asm/cpufeatures.h>
 
 #include "internal.h"
 
@@ -27,10 +28,16 @@ static bool __erdt_enabled;
 
 #define ERDT_VALID_VERSION		1
 #define CMRC_SUPPORTED_INDEX_FN		1
+#define UNAVAILABLE_COUNTER		BIT_ULL(63)
 #define RMDD_FLAG_CPU_L3_DOMAIN		BIT(0)
 
 /* Bitmask of valid sub-tables found in the first RMDD, used to ensure all RMDDs match. */
 static u32 valid_subtbl_mask;
+
+bool erdt_support_features(int flag)
+{
+	return false;
+}
 
 int erdt_get_max_rmid(int cpu)
 {
@@ -48,6 +55,11 @@ int erdt_get_max_rmid(int cpu)
 	}
 
 	return -1;
+}
+
+int erdt_mon_read(struct rdt_domain_hdr *hdr, int ev_id, int rmid, u64 *val)
+{
+	return -EIO;
 }
 
 static void __iomem *erdt_ioremap(phys_addr_t base, u32 num_pages, const char *desc)
