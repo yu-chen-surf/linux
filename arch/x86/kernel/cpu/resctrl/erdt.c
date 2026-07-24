@@ -37,6 +37,11 @@ static int erdt_max_rmid;
 /* Scale to bytes for the monitoring counters when ERDT is enabled. */
 static int erdt_scale;
 
+bool erdt_support(int flag)
+{
+	return false;
+}
+
 int erdt_get_max_rmid(void)
 {
 	return erdt_max_rmid;
