@@ -1013,6 +1013,7 @@ static __init void check_quirks(void)
 
 static __init bool get_rdt_resources(void)
 {
+	erdt_init();
 	rdt_alloc_capable = get_rdt_alloc_resources();
 	rdt_mon_capable = get_rdt_mon_resources();
 
@@ -1114,7 +1115,7 @@ void resctrl_cpu_detect(struct cpuinfo_x86 *c)
 	}
 }
 
-static int __init resctrl_arch_late_init(void)
+static int __init __resctrl_arch_late_init(void)
 {
 	struct rdt_resource *r;
 	int state, ret, i;
@@ -1157,6 +1158,15 @@ static int __init resctrl_arch_late_init(void)
 	return 0;
 }
 
+static int __init resctrl_arch_late_init(void)
+{
+	int ret = __resctrl_arch_late_init();
+
+	if (ret)
+		erdt_exit();
+	return ret;
+}
+
 late_initcall(resctrl_arch_late_init);
 
 static void __exit resctrl_arch_exit(void)
@@ -1166,6 +1176,8 @@ static void __exit resctrl_arch_exit(void)
 	cpuhp_remove_state(rdt_online);
 
 	resctrl_exit();
+
+	erdt_exit();
 }
 
 __exitcall(resctrl_arch_exit);
