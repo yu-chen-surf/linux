@@ -207,6 +207,72 @@ cleanup:
 	return false;
 }
 
+bool erdt_cpu_valid(int cpu)
+{
+	struct erdt_domain_info *d;
+	int dom_id;
+
+	if (!erdt_enabled)
+		return true;
+
+	dom_id = get_cpu_cacheinfo_id(cpu, RESCTRL_L3_CACHE);
+	if (dom_id < 0)
+		return true;
+
+	/*
+	 * Find the erdt_domain_info that contains this CPU,
+	 * check if all CPUs in erdt_domain_info's cpumask
+	 * have the same id(L3 id).
+	 *
+	 * For example, erdt_domain_info reports:
+	 * domain0: CPU0, CPU2, domain1: CPU1, CPU3
+	 * rdt_domain_hdr reports:
+	 * domain0: CPU0, CPU1, domain1: CPU2, CPU3
+	 * As a result, CPU1, CPU2 should not be covered by resctrl.
+	 */
+	list_for_each_entry(d, &domain_info_list, entry) {
+
+		if (cpumask_test_cpu(cpu, &d->cpu_mask)) {
+			if (d->dom_id == -1) {
+				d->dom_id = dom_id;
+			} else if (d->dom_id != dom_id) {
+				pr_warn(FW_BUG "CPU%d's id=%d not equal to CACD domain(%*pbl) id=%d, skip this CPU\n",
+					cpu, dom_id, cpumask_pr_args(&d->cpu_mask), d->dom_id);
+
+				return false;
+			}
+
+			return true;
+		}
+	}
+
+	pr_warn(FW_BUG "Cannot find CACD domain for CPU%d\n", cpu);
+	return false;
+}
+
+/*
+ * Associate ERDT table information with this domain.
+ */
+void erdt_l3_mon_domain_setup(int cpu, struct rdt_domain_hdr *hdr)
+{
+	struct rdt_hw_l3_mon_domain *hw_dom;
+	struct erdt_domain_info *d;
+
+	if (!erdt_enabled)
+		return;
+
+	hw_dom = resctrl_to_arch_mon_dom(container_of(hdr, struct rdt_l3_mon_domain, hdr));
+
+	list_for_each_entry(d, &domain_info_list, entry) {
+		if (cpumask_test_cpu(cpu, &d->cpu_mask)) {
+			/* Assign the ERDT information to hw_dom */
+			if (!hw_dom->d_info)
+				hw_dom->d_info = d;
+			return;
+		}
+	}
+}
+
 void erdt_exit(void)
 {
 	struct erdt_domain_info *d, *tmp;

@@ -580,6 +580,9 @@ static void domain_add_cpu_mon(int cpu, struct rdt_resource *r)
 		return;
 	}
 
+	if (!erdt_cpu_valid(cpu))
+		return;
+
 	hdr = resctrl_find_domain(&r->mon_domains, id, &add_pos);
 	if (hdr)
 		cpumask_set_cpu(cpu, &hdr->cpu_mask);
@@ -589,8 +592,14 @@ static void domain_add_cpu_mon(int cpu, struct rdt_resource *r)
 		/* Update the mbm_assign_mode state for the CPU if supported */
 		if (r->mon.mbm_cntr_assignable)
 			resctrl_arch_mbm_cntr_assign_set_one(r);
-		if (!hdr)
+		if (!hdr) {
 			l3_mon_domain_setup(cpu, id, r, add_pos);
+			hdr = resctrl_find_domain(&r->mon_domains, id, NULL);
+		}
+
+		if (hdr)
+			erdt_l3_mon_domain_setup(cpu, hdr);
+
 		break;
 	case RDT_RESOURCE_PERF_PKG:
 		if (!hdr)
